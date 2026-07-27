@@ -32,7 +32,7 @@ STANDARD WEB HOSTING
 NOTES
 - HTTPS is recommended and is required for full installable-app/PWA support.
 - The WhatsApp/social preview is configured for:
-  https://gipsdrill.github.io/work-hours-tracker/
+  https://gipsdrill.github.io/GRL-Driver-Invoice-Calculator/
   If the final website address changes, update the canonical, og:url,
   og:image and twitter:image addresses near the top of index.html.
 - WhatsApp may keep an older link preview in its cache. After publishing an
