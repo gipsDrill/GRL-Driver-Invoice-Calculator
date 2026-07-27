@@ -1,4 +1,4 @@
-const CACHE_NAME = "grl-invoice-static-v2";
+const CACHE_NAME = "grl-invoice-static-v3";
 const SCOPE_URL = self.registration.scope;
 const scopedUrl = (path = "") => new URL(path, SCOPE_URL).toString();
 const APP_SHELL = [
@@ -7,6 +7,7 @@ const APP_SHELL = [
   "favicon.svg",
   "mobile-polish.css",
   "install-shortcut.js",
+  "og-image.jpeg",
   "icons/grl-app-192.png",
   "icons/grl-app-512.png",
   "icons/apple-touch-icon.png",

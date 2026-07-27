@@ -31,6 +31,12 @@ STANDARD WEB HOSTING
 
 NOTES
 - HTTPS is recommended and is required for full installable-app/PWA support.
+- The WhatsApp/social preview is configured for:
+  https://gipsdrill.github.io/work-hours-tracker/
+  If the final website address changes, update the canonical, og:url,
+  og:image and twitter:image addresses near the top of index.html.
+- WhatsApp may keep an older link preview in its cache. After publishing an
+  update, share the link once with a new query, for example: ?v=2
 - User profiles and saved calculator data are stored locally in that browser.
 - The main index.html contains the complete calculator interface and application code.
 - mobile-polish.css contains the responsive phone and tablet interface refinements.
