@@ -6,6 +6,7 @@ const APP_SHELL = [
   "manifest.webmanifest",
   "favicon.svg",
   "mobile-polish.css",
+  "install-shortcut.js",
   "icons/grl-app-192.png",
   "icons/grl-app-512.png",
   "icons/apple-touch-icon.png",
