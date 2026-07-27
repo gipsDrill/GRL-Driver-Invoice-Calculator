@@ -33,4 +33,5 @@ NOTES
 - HTTPS is recommended and is required for full installable-app/PWA support.
 - User profiles and saved calculator data are stored locally in that browser.
 - The main index.html contains the complete calculator interface and application code.
+- mobile-polish.css contains the responsive phone and tablet interface refinements.
 - PDF and Excel generation works locally and online.

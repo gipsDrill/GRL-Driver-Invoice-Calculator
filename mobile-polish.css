@@ -1,0 +1,514 @@
+/*
+ * Mobile-first visual polish for the GRL Driver Invoice Calculator.
+ * Desktop rules remain deliberately conservative; the detailed redesign starts
+ * below 760px so the established computer layout is preserved.
+ */
+
+:root {
+  --mobile-radius: 18px;
+  --mobile-shadow: 0 8px 28px rgba(74, 24, 49, 0.09);
+  --mobile-control: 48px;
+}
+
+@media (min-width: 761px) {
+  .tracker-card,
+  .invoice-details,
+  .settings-card,
+  .week-summary-card,
+  .help-section,
+  .total-card {
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+
+  .tracker-card:hover,
+  .invoice-details:hover,
+  .settings-card:hover,
+  .week-summary-card:hover,
+  .help-section:hover {
+    border-color: rgba(128, 79, 103, 0.32);
+    box-shadow: 0 14px 38px rgba(74, 24, 49, 0.1);
+  }
+}
+
+@media (max-width: 760px) {
+  html {
+    scroll-padding-top: 96px;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 12% -8%, rgba(154, 98, 124, 0.14), transparent 30%),
+      linear-gradient(180deg, #f8f4f6 0, #f3eef1 100%);
+    overscroll-behavior-y: none;
+  }
+
+  .app-shell {
+    overflow: clip;
+  }
+
+  .top-glow {
+    height: 340px;
+    opacity: 0.72;
+  }
+
+  .page {
+    width: min(100% - 20px, 680px);
+    padding: max(18px, env(safe-area-inset-top)) 0
+      calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .page-header {
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+
+  .eyebrow,
+  .section-kicker {
+    margin-bottom: 6px;
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+  }
+
+  h1 {
+    max-width: 19ch;
+    margin-bottom: 7px;
+    font-size: clamp(1.78rem, 8.3vw, 2.35rem);
+    line-height: 1.04;
+  }
+
+  .intro {
+    max-width: 38rem;
+    font-size: 0.86rem;
+    line-height: 1.46;
+  }
+
+  .header-actions {
+    position: relative;
+    z-index: 8;
+    gap: 0;
+  }
+
+  /* The installation callout is useful on desktop, but it dominates the
+     first phone viewport and makes the calculator feel like a website ad. */
+  .install-app {
+    display: none !important;
+  }
+
+  .week-switch {
+    position: sticky;
+    top: max(8px, env(safe-area-inset-top));
+    z-index: 12;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    padding: 4px;
+    border-color: rgba(126, 86, 105, 0.25);
+    border-radius: 15px;
+    background: rgba(255, 252, 253, 0.93);
+    box-shadow:
+      0 9px 25px rgba(74, 24, 49, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .week-switch button {
+    min-height: 42px;
+    padding: 0 7px;
+    border-radius: 11px;
+    font-size: 0.72rem;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .week-switch button.active {
+    box-shadow: 0 5px 14px rgba(74, 24, 49, 0.24);
+  }
+
+  .tracker-card,
+  .invoice-details,
+  .settings-card,
+  .week-summary-card,
+  .help-section {
+    border-color: rgba(151, 120, 135, 0.28);
+    border-radius: var(--mobile-radius);
+    box-shadow: var(--mobile-shadow);
+  }
+
+  .invoice-details,
+  .tracker-card {
+    padding: 16px 13px 13px;
+  }
+
+  .invoice-details {
+    margin-bottom: 10px;
+  }
+
+  .section-heading {
+    gap: 4px;
+    padding: 0 3px 12px;
+  }
+
+  .section-heading h2 {
+    font-size: 1.16rem;
+    line-height: 1.2;
+  }
+
+  .rate-note {
+    max-width: 34rem;
+    font-size: 0.68rem;
+    line-height: 1.35;
+  }
+
+  .saved-details-bar {
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 12px;
+    border-radius: 13px;
+    background: linear-gradient(145deg, #fcf8fa, #f7f0f4);
+  }
+
+  .saved-details-copy {
+    min-height: auto;
+  }
+
+  .saved-profile-select select,
+  .saved-details-actions button {
+    min-height: var(--mobile-control);
+    border-radius: 11px;
+  }
+
+  .invoice-fields {
+    gap: 11px;
+  }
+
+  .invoice-fields label,
+  .mobile-fields label,
+  .settings-fields label {
+    gap: 5px;
+    font-size: 0.71rem;
+  }
+
+  .invoice-fields input,
+  .mobile-fields input,
+  .settings-fields select {
+    height: var(--mobile-control);
+    border-radius: 11px;
+    background: #fff;
+  }
+
+  .vat-settings {
+    gap: 9px;
+    margin-top: 11px;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .vat-toggle {
+    min-height: 40px;
+  }
+
+  .week-ending-controls {
+    gap: 10px;
+    margin: 0 0 12px;
+    padding: 11px;
+    border-radius: 13px;
+    background: linear-gradient(145deg, #faf6f8, #f3eaef);
+  }
+
+  .week-ending-controls > div span {
+    font-size: 0.77rem;
+  }
+
+  .week-ending-controls input {
+    height: var(--mobile-control);
+    border-radius: 11px;
+  }
+
+  .mobile-days {
+    gap: 9px;
+  }
+
+  .day-card {
+    padding: 12px;
+    border-color: rgba(162, 137, 149, 0.32);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 4px 14px rgba(68, 40, 54, 0.055);
+  }
+
+  .mobile-day-head {
+    margin-bottom: 10px;
+  }
+
+  .mobile-day-head .day-label {
+    min-width: 0;
+    gap: 1px;
+  }
+
+  .mobile-day-head .day-label strong {
+    font-size: 1rem;
+  }
+
+  .mobile-night {
+    min-height: 38px;
+    padding-left: 10px;
+    border-left: 1px solid #eadde3;
+  }
+
+  .night-check > span {
+    width: 27px;
+    height: 27px;
+    border-radius: 8px;
+  }
+
+  .mobile-fields {
+    gap: 9px;
+  }
+
+  .mobile-fields .currency-input {
+    height: var(--mobile-control);
+    border-radius: 11px;
+    background: #fff;
+  }
+
+  .mobile-fields .currency-input input {
+    height: calc(var(--mobile-control) - 2px);
+  }
+
+  .mobile-results {
+    margin-top: 10px;
+    padding: 10px 11px 0;
+  }
+
+  .mobile-results strong {
+    font-size: 0.96rem;
+  }
+
+  .mobile-comments summary {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 10px;
+  }
+
+  .mobile-comments textarea {
+    min-height: 92px;
+    border-radius: 11px;
+  }
+
+  .settings-grid {
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .settings-card,
+  .week-summary-card,
+  .help-section {
+    padding: 14px 13px;
+  }
+
+  .earnings-week-card {
+    border-radius: 14px;
+    background: linear-gradient(145deg, #fff, #f8f1f5);
+  }
+
+  .earning-row {
+    gap: 8px;
+  }
+
+  .compact-money-field .currency-input {
+    height: 42px;
+    border-radius: 10px;
+  }
+
+  .week-summary-list > div {
+    padding: 11px 12px;
+    border-radius: 13px;
+  }
+
+  .action-bar {
+    gap: 9px;
+    margin: 11px 0;
+    padding: 10px;
+    border: 1px solid rgba(151, 120, 135, 0.25);
+    border-radius: 16px;
+    background: rgba(255, 252, 253, 0.94);
+    box-shadow: var(--mobile-shadow);
+  }
+
+  .action-bar button {
+    min-height: 46px;
+    border-radius: 11px;
+  }
+
+  .primary-action {
+    font-size: 0.79rem !important;
+  }
+
+  .secondary-actions {
+    gap: 7px;
+  }
+
+  .secondary-actions button {
+    padding: 8px 9px;
+    line-height: 1.2;
+  }
+
+  .totals-grid {
+    gap: 8px;
+  }
+
+  .total-card {
+    min-height: 86px;
+    padding: 13px;
+    border-radius: 15px;
+    box-shadow: 0 5px 17px rgba(74, 24, 49, 0.065);
+  }
+
+  .total-icon {
+    width: 47px;
+    height: 47px;
+    border-radius: 13px;
+  }
+
+  .grand-total {
+    border-color: rgba(74, 24, 49, 0.34);
+    background: linear-gradient(145deg, #fff, #f5eaf0);
+  }
+
+  .help-grid details {
+    border-radius: 13px;
+  }
+
+  .help-grid summary {
+    min-height: 48px;
+    padding: 0 13px;
+  }
+
+  footer {
+    padding-bottom: env(safe-area-inset-bottom);
+    text-align: center;
+  }
+}
+
+@media (max-width: 430px) {
+  .page {
+    width: calc(100% - 16px);
+  }
+
+  h1 {
+    font-size: clamp(1.66rem, 8.8vw, 2rem);
+  }
+
+  .invoice-details,
+  .tracker-card,
+  .settings-card,
+  .week-summary-card,
+  .help-section {
+    padding-right: 11px;
+    padding-left: 11px;
+  }
+
+  .invoice-fields,
+  .mobile-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .invoice-fields label:first-child,
+  .invoice-fields label:nth-child(2),
+  .invoice-fields label:nth-child(3),
+  .invoice-fields label:nth-child(4),
+  .mobile-fields label:nth-child(1),
+  .mobile-fields label:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  .saved-details-actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .saved-details-actions .remove-profile {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .week-ending-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .earning-row,
+  .earning-row.expense-row {
+    grid-template-columns: minmax(0, 1fr) minmax(118px, 0.8fr);
+  }
+
+  .earning-row-title {
+    grid-column: auto;
+  }
+
+  .expense-row .compact-money-field {
+    grid-column: auto;
+  }
+
+  .earning-total {
+    grid-column: 2;
+  }
+
+  .secondary-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .secondary-actions button {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 360px) {
+  .page {
+    width: calc(100% - 12px);
+  }
+
+  .week-switch button {
+    padding: 0 4px;
+    font-size: 0.67rem;
+  }
+
+  .invoice-fields,
+  .mobile-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-fields label,
+  .mobile-fields label {
+    grid-column: auto !important;
+  }
+
+  .earning-row,
+  .earning-row.expense-row {
+    grid-template-columns: 1fr;
+  }
+
+  .earning-row-title,
+  .expense-row .compact-money-field,
+  .earning-total {
+    grid-column: auto;
+  }
+
+  .earning-total {
+    min-height: auto;
+    padding: 7px 0 0;
+    border-top: 1px solid #e6d7de;
+    border-left: 0;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  button,
+  summary,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+}
