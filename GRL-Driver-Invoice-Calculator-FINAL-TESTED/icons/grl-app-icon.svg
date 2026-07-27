@@ -1,0 +1,6 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#4A1831"/>
+  <rect x="54" y="54" width="404" height="404" rx="92" fill="#FFF9FC" fill-opacity="0.06" stroke="#CDA5B7" stroke-width="8"/>
+  <text x="256" y="258" fill="#FFF9FC" font-family="Arial, sans-serif" font-size="132" font-weight="800" letter-spacing="7" text-anchor="middle">GRL</text>
+  <text x="256" y="315" fill="#E2C2D0" font-family="Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="1.8" text-anchor="middle">DRIVER PAY &amp; INVOICES</text>
+</svg>
