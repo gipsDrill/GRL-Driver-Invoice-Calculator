@@ -1,0 +1,7 @@
+GRL Invoice Calculator — side navigation fix
+
+- 04 Invoice now receives its own active state while approaching the invoice actions.
+- 05 Total becomes active for the totals section and remains active at the bottom.
+- Clicking Invoice and Total scrolls to useful, distinct positions.
+- The same behaviour is applied to desktop and mobile navigation.
+- Service worker cache version was increased so the updated script is delivered.

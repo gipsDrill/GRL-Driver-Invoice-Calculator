@@ -13,9 +13,9 @@
   let mobileNav = null;
   let progress = null;
   let grandTotal = null;
-  let observedTargets = [];
   let activeKey = "details";
   let pointerFrame = null;
+  let scrollFrame = null;
 
   const queryTarget = (item) => document.querySelector(item.selector);
 
@@ -23,12 +23,25 @@
     const target = queryTarget(item);
     if (!target) return;
 
-    target.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-      block: "start",
-    });
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth";
+
+    // The Invoice action bar is sticky on desktop, so scrollIntoView cannot
+    // place it at a useful position. Instead, bring the Total cards into the
+    // lower part of the viewport, which exposes the complete invoice toolbar
+    // and gives Invoice its own clear navigation state.
+    if (item.key === "invoice") {
+      const totalTarget = queryTarget(SECTIONS[4]);
+      if (totalTarget) {
+        const totalTop = totalTarget.getBoundingClientRect().top + window.scrollY;
+        const desiredTop = totalTop - window.innerHeight * 0.68;
+        window.scrollTo({ top: Math.max(0, desiredTop), behavior });
+        return;
+      }
+    }
+
+    target.scrollIntoView({ behavior, block: "start" });
   };
 
   const makeSectionButton = (item, index, compact = false) => {
@@ -44,17 +57,21 @@
       button.innerHTML = `<span>0${index + 1}</span><b>${item.label}</b>`;
     }
 
-    button.addEventListener("click", () => scrollToSection(item));
+    button.addEventListener("click", () => {
+      setActive(item.key);
+      scrollToSection(item);
+    });
     return button;
   };
 
   const setActive = (key) => {
     activeKey = key;
-    document
-      .querySelectorAll("[data-section]")
-      .forEach((button) =>
-        button.classList.toggle("active", button.dataset.section === key),
-      );
+    document.querySelectorAll("[data-section]").forEach((button) => {
+      const isActive = button.dataset.section === key;
+      button.classList.toggle("active", isActive);
+      if (isActive) button.setAttribute("aria-current", "step");
+      else button.removeAttribute("aria-current");
+    });
   };
 
   const updateProgress = () => {
@@ -82,27 +99,54 @@
     if (intro && intro.textContent !== nextText) intro.textContent = nextText;
   };
 
-  const refreshObserver = () => {
-    observedTargets.forEach(({ observer }) => observer.disconnect());
-    observedTargets = [];
+  const syncActiveFromScroll = () => {
+    if (scrollFrame) return;
 
-    SECTIONS.forEach((item) => {
-      const target = queryTarget(item);
-      if (!target) return;
+    scrollFrame = window.requestAnimationFrame(() => {
+      scrollFrame = null;
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          const entry = entries[0];
-          if (entry?.isIntersecting) setActive(item.key);
-        },
-        {
-          rootMargin: "-22% 0px -62% 0px",
-          threshold: 0,
-        },
+      const root = document.documentElement;
+      const maxScroll = Math.max(0, root.scrollHeight - window.innerHeight);
+      const totalTarget = queryTarget(SECTIONS[4]);
+
+      if (totalTarget) {
+        const totalTopInViewport = totalTarget.getBoundingClientRect().top;
+
+        // Give the two final navigation steps a deliberate, visible range.
+        // This also works when the desktop action bar is sticky.
+        if (
+          window.scrollY >= maxScroll - 8 ||
+          totalTopInViewport <= window.innerHeight * 0.55
+        ) {
+          setActive("summary");
+          return;
+        }
+
+        if (totalTopInViewport <= window.innerHeight * 0.78) {
+          setActive("invoice");
+          return;
+        }
+      }
+
+      const primarySections = SECTIONS.slice(0, 3)
+        .map((item) => ({ item, target: queryTarget(item) }))
+        .filter(({ target }) => target);
+
+      if (!primarySections.length) return;
+
+      const activationOffset = Math.min(
+        300,
+        Math.max(130, window.innerHeight * 0.35),
       );
+      const activationY = window.scrollY + activationOffset;
+      let current = primarySections[0].item;
 
-      observer.observe(target);
-      observedTargets.push({ observer, target });
+      primarySections.forEach(({ item, target }) => {
+        const sectionTop = target.getBoundingClientRect().top + window.scrollY;
+        if (sectionTop <= activationY + 1) current = item;
+      });
+
+      setActive(current.key);
     });
   };
 
@@ -190,22 +234,17 @@
     document.documentElement.dataset.nextgenReady = "true";
     buildRail();
     buildMobileNav();
-    refreshObserver();
     syncTotal();
     syncIntro();
     updateProgress();
     setActive(activeKey);
+    syncActiveFromScroll();
     enablePointerLight();
 
     const pageObserver = new MutationObserver(() => {
       syncTotal();
       syncIntro();
-      if (
-        observedTargets.some(({ target }) => !target.isConnected) ||
-        observedTargets.length !== SECTIONS.length
-      ) {
-        refreshObserver();
-      }
+      syncActiveFromScroll();
     });
 
     pageObserver.observe(document.getElementById("root"), {
@@ -214,8 +253,13 @@
       characterData: true,
     });
 
-    window.addEventListener("scroll", updateProgress, { passive: true });
-    window.addEventListener("resize", updateProgress, { passive: true });
+    const handleViewportChange = () => {
+      updateProgress();
+      syncActiveFromScroll();
+    };
+
+    window.addEventListener("scroll", handleViewportChange, { passive: true });
+    window.addEventListener("resize", handleViewportChange, { passive: true });
   };
 
   start();
