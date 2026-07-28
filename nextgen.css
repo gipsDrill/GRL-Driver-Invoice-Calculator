@@ -952,3 +952,103 @@ body::before {
       linear-gradient(145deg, #191719 0%, #272126 52%, #191719 100%);
   }
 }
+
+/* Laptop-width table fit: keep the full 14-day work log visible without horizontal scrolling. */
+@media (min-width: 761px) and (max-width: 1440px) {
+  .tracker-card {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .desktop-table-wrap {
+    overflow-x: hidden;
+  }
+
+  .work-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .work-table th,
+  .work-table td {
+    min-width: 0;
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+  .work-table th {
+    font-size: clamp(0.59rem, 0.68vw, 0.69rem);
+    letter-spacing: 0.035em;
+  }
+
+  .work-table td {
+    height: 60px;
+  }
+
+  .work-table th:nth-child(1),
+  .work-table td:nth-child(1) { width: 9%; }
+  .work-table th:nth-child(2),
+  .work-table td:nth-child(2) { width: 12%; }
+  .work-table th:nth-child(3),
+  .work-table td:nth-child(3) { width: 14%; }
+  .work-table th:nth-child(4),
+  .work-table td:nth-child(4) { width: 9%; }
+  .work-table th:nth-child(5),
+  .work-table td:nth-child(5) { width: 9%; }
+  .work-table th:nth-child(6),
+  .work-table td:nth-child(6) { width: 7%; }
+  .work-table th:nth-child(7),
+  .work-table td:nth-child(7) { width: 11%; }
+  .work-table th:nth-child(8),
+  .work-table td:nth-child(8) { width: 9%; }
+  .work-table th:nth-child(9),
+  .work-table td:nth-child(9) { width: 8%; }
+  .work-table th:nth-child(10),
+  .work-table td:nth-child(10) { width: 12%; }
+
+  .day-label {
+    min-width: 0;
+    padding-left: 6px;
+  }
+
+  .day-label strong {
+    font-size: clamp(0.72rem, 0.84vw, 0.86rem);
+  }
+
+  .day-label span {
+    font-size: clamp(0.58rem, 0.66vw, 0.68rem);
+  }
+
+  .work-table input[type="date"],
+  .work-table input[type="time"],
+  .work-table input[type="text"],
+  .work-table input[type="number"] {
+    min-width: 0;
+    height: 38px;
+    padding-left: 6px;
+    padding-right: 6px;
+    font-size: clamp(0.68rem, 0.78vw, 0.82rem);
+  }
+
+  .comments-editor,
+  .comments-editor summary {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .comments-editor summary {
+    overflow: hidden;
+    padding-left: 7px;
+    padding-right: 7px;
+    font-size: clamp(0.62rem, 0.72vw, 0.75rem);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .salary-cell,
+  .hours-cell {
+    font-size: clamp(0.72rem, 0.82vw, 0.86rem);
+    white-space: nowrap;
+  }
+}

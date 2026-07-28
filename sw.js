@@ -1,4 +1,4 @@
-const CACHE_NAME = "grl-invoice-static-v11";
+const CACHE_NAME = "grl-driver-invoice-v5";
 const SCOPE_URL = self.registration.scope;
 const scopedUrl = (path = "") => new URL(path, SCOPE_URL).toString();
 const APP_SHELL = [
