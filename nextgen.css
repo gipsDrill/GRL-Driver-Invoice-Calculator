@@ -865,3 +865,48 @@ footer {
       linear-gradient(145deg, #121011 0%, #1b1619 52%, #121011 100%);
   }
 }
+
+/* Final visual-only polish requested for the totals card and core actions.
+   No calculator behaviour is changed below. */
+.action-bar .primary-action:hover,
+.action-bar .primary-action:active {
+  border-color: #581731 !important;
+  background: #ffffff !important;
+  color: #581731 !important;
+}
+
+.action-bar .secondary-actions button:nth-child(-n + 2):hover,
+.action-bar .secondary-actions button:nth-child(-n + 2):active {
+  border-color: #99969c !important;
+  background: #ffffff !important;
+  color: #4d484e !important;
+}
+
+.action-bar .primary-action:hover svg,
+.action-bar .primary-action:active svg,
+.action-bar .secondary-actions button:nth-child(-n + 2):hover svg,
+.action-bar .secondary-actions button:nth-child(-n + 2):active svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
+@media (max-width: 760px) {
+  .grand-total {
+    color: var(--ink);
+  }
+
+  .grand-total .total-icon {
+    border-color: rgba(184, 133, 98, 0.34);
+    background: #efe5da;
+    color: var(--wine);
+  }
+
+  .grand-total span,
+  .grand-total small {
+    color: var(--muted);
+  }
+
+  .grand-total strong {
+    color: #2a2326;
+  }
+}
