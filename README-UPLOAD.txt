@@ -42,6 +42,8 @@ NOTES
 - mobile-polish.css contains the responsive phone and tablet interface refinements.
 - sticky-week-switch.js keeps the Week 1 / Week 2 selector available at the
   top of the screen while scrolling, on computers and phones.
+- nextgen.css contains the Obsidian Ledger visual system for desktop and mobile.
+- nextgen-ui.js provides the scroll-aware workspace navigation and live total.
 - install-shortcut.js provides the small phone installation button. Android
   uses the browser's native installation prompt; iPhone displays the required
   Safari Add to Home Screen instructions.
