@@ -1,7 +1,9 @@
-GRL Invoice Calculator — side navigation fix
+GRL Invoice Calculator — complete navigation repair
 
-- 04 Invoice now receives its own active state while approaching the invoice actions.
-- 05 Total becomes active for the totals section and remains active at the bottom.
-- Clicking Invoice and Total scrolls to useful, distinct positions.
-- The same behaviour is applied to desktop and mobile navigation.
-- Service worker cache version was increased so the updated script is delivered.
+- 03 Pay now has its own stable active range and is no longer skipped.
+- 04 Invoice activates while the invoice action toolbar is in focus.
+- 05 Total activates at the totals cards and remains active at page end.
+- All five desktop and mobile navigation buttons scroll to distinct positions.
+- The floating Week 1 / Week 2 / Both weeks selector follows scrolling again.
+- Week selector buttons remain synchronised with the original controls.
+- Service worker cache updated to v7 so browsers receive the repaired scripts.

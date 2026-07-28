@@ -19,29 +19,48 @@
 
   const queryTarget = (item) => document.querySelector(item.selector);
 
+  const reducedMotion = () =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const documentTop = (element) => {
+    if (!element) return 0;
+    const rect = element.getBoundingClientRect();
+    return rect.top + window.scrollY;
+  };
+
+  const scrollToPosition = (top) => {
+    window.scrollTo({
+      top: Math.max(0, top),
+      behavior: reducedMotion() ? "auto" : "smooth",
+    });
+  };
+
   const scrollToSection = (item) => {
     const target = queryTarget(item);
     if (!target) return;
 
-    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? "auto"
-      : "smooth";
+    const viewport = Math.max(320, window.innerHeight);
+    const normalOffset = Math.min(180, Math.max(96, viewport * 0.18));
 
-    // The Invoice action bar is sticky on desktop, so scrollIntoView cannot
-    // place it at a useful position. Instead, bring the Total cards into the
-    // lower part of the viewport, which exposes the complete invoice toolbar
-    // and gives Invoice its own clear navigation state.
     if (item.key === "invoice") {
       const totalTarget = queryTarget(SECTIONS[4]);
       if (totalTarget) {
-        const totalTop = totalTarget.getBoundingClientRect().top + window.scrollY;
-        const desiredTop = totalTop - window.innerHeight * 0.68;
-        window.scrollTo({ top: Math.max(0, desiredTop), behavior });
+        // Position the Total cards low enough in the viewport to expose the
+        // complete sticky invoice toolbar and give Invoice a clear range.
+        scrollToPosition(documentTop(totalTarget) - viewport * 0.7);
         return;
       }
     }
 
-    target.scrollIntoView({ behavior, block: "start" });
+    if (item.key === "summary") {
+      const totalTarget = queryTarget(SECTIONS[4]);
+      if (totalTarget) {
+        scrollToPosition(documentTop(totalTarget) - viewport * 0.18);
+        return;
+      }
+    }
+
+    scrollToPosition(documentTop(target) - normalOffset);
   };
 
   const makeSectionButton = (item, index, compact = false) => {
@@ -65,7 +84,9 @@
   };
 
   const setActive = (key) => {
+    if (!SECTIONS.some((item) => item.key === key)) return;
     activeKey = key;
+
     document.querySelectorAll("[data-section]").forEach((button) => {
       const isActive = button.dataset.section === key;
       button.classList.toggle("active", isActive);
@@ -78,10 +99,7 @@
     const root = document.documentElement;
     const available = Math.max(1, root.scrollHeight - window.innerHeight);
     const value = Math.min(1, Math.max(0, window.scrollY / available));
-    document.documentElement.style.setProperty(
-      "--nextgen-scroll",
-      `${(value * 100).toFixed(2)}%`,
-    );
+    root.style.setProperty("--nextgen-scroll", `${(value * 100).toFixed(2)}%`);
     progress?.setAttribute("aria-valuenow", String(Math.round(value * 100)));
   };
 
@@ -105,48 +123,56 @@
     scrollFrame = window.requestAnimationFrame(() => {
       scrollFrame = null;
 
+      const viewport = Math.max(320, window.innerHeight);
       const root = document.documentElement;
-      const maxScroll = Math.max(0, root.scrollHeight - window.innerHeight);
+      const maxScroll = Math.max(0, root.scrollHeight - viewport);
+
       const totalTarget = queryTarget(SECTIONS[4]);
+      const payTarget = queryTarget(SECTIONS[2]);
+      const hoursTarget = queryTarget(SECTIONS[1]);
+      const totalRect = totalTarget?.getBoundingClientRect();
+      const payRect = payTarget?.getBoundingClientRect();
 
-      if (totalTarget) {
-        const totalTopInViewport = totalTarget.getBoundingClientRect().top;
-
-        // Give the two final navigation steps a deliberate, visible range.
-        // This also works when the desktop action bar is sticky.
-        if (
-          window.scrollY >= maxScroll - 8 ||
-          totalTopInViewport <= window.innerHeight * 0.55
-        ) {
-          setActive("summary");
-          return;
-        }
-
-        if (totalTopInViewport <= window.innerHeight * 0.78) {
-          setActive("invoice");
-          return;
-        }
+      // Total wins only near the totals cards or at the absolute page end.
+      if (
+        totalRect &&
+        (window.scrollY >= maxScroll - 10 || totalRect.top <= viewport * 0.22)
+      ) {
+        setActive("summary");
+        return;
       }
 
-      const primarySections = SECTIONS.slice(0, 3)
-        .map((item) => ({ item, target: queryTarget(item) }))
-        .filter(({ target }) => target);
+      // Keep Pay active while its card still occupies the reading area. The
+      // bottom bound is what prevents the nearby Invoice step from skipping it.
+      if (
+        payRect &&
+        payRect.top <= viewport * 0.38 &&
+        payRect.bottom > viewport * 0.2
+      ) {
+        setActive("pay");
+        return;
+      }
 
-      if (!primarySections.length) return;
+      // Invoice begins once Pay has moved above the reading line and remains
+      // active until the totals themselves become the focus.
+      if (
+        totalRect &&
+        totalRect.top <= viewport * 0.72 &&
+        (!payRect || payRect.bottom <= viewport * 0.2)
+      ) {
+        setActive("invoice");
+        return;
+      }
 
-      const activationOffset = Math.min(
-        300,
-        Math.max(130, window.innerHeight * 0.35),
-      );
-      const activationY = window.scrollY + activationOffset;
-      let current = primarySections[0].item;
+      if (
+        hoursTarget &&
+        hoursTarget.getBoundingClientRect().top <= viewport * 0.34
+      ) {
+        setActive("hours");
+        return;
+      }
 
-      primarySections.forEach(({ item, target }) => {
-        const sectionTop = target.getBoundingClientRect().top + window.scrollY;
-        if (sectionTop <= activationY + 1) current = item;
-      });
-
-      setActive(current.key);
+      setActive("details");
     });
   };
 
@@ -160,14 +186,7 @@
     brand.className = "nextgen-rail-brand";
     brand.setAttribute("aria-label", "Back to top");
     brand.innerHTML = "<strong>GRL</strong><small>INVOICE<br>WORKSPACE</small>";
-    brand.addEventListener("click", () =>
-      window.scrollTo({
-        top: 0,
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto"
-          : "smooth",
-      }),
-    );
+    brand.addEventListener("click", () => scrollToPosition(0));
 
     const nav = document.createElement("nav");
     nav.className = "nextgen-rail-nav";
@@ -260,6 +279,9 @@
 
     window.addEventListener("scroll", handleViewportChange, { passive: true });
     window.addEventListener("resize", handleViewportChange, { passive: true });
+    window.addEventListener("orientationchange", handleViewportChange, {
+      passive: true,
+    });
   };
 
   start();
