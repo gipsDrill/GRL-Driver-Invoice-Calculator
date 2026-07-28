@@ -1,9 +1,10 @@
-GRL Invoice Calculator — complete navigation repair
+STABLE NAVIGATION FIX
 
-- 03 Pay now has its own stable active range and is no longer skipped.
-- 04 Invoice activates while the invoice action toolbar is in focus.
-- 05 Total activates at the totals cards and remains active at page end.
-- All five desktop and mobile navigation buttons scroll to distinct positions.
-- The floating Week 1 / Week 2 / Both weeks selector follows scrolling again.
-- Week selector buttons remain synchronised with the original controls.
-- Service worker cache updated to v7 so browsers receive the repaired scripts.
+- Fixed 03 Pay so it has its own scroll range and is no longer skipped.
+- Fixed 04 Invoice and 05 Total so both activate separately near the page end.
+- Restored the original, stable floating Week 1 / Week 2 selector behavior.
+- Removed the MutationObserver loop that could freeze the page during loading.
+- Updated the service worker cache version and script URLs.
+
+After uploading, refresh once with Ctrl + F5. If the app was installed as a PWA,
+close it fully and reopen it so the new service worker can activate.

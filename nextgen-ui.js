@@ -18,8 +18,7 @@
   let scrollFrame = null;
 
   const queryTarget = (item) => document.querySelector(item.selector);
-
-  const reducedMotion = () =>
+  const prefersReducedMotion = () =>
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const documentTop = (element) => {
@@ -28,39 +27,98 @@
     return rect.top + window.scrollY;
   };
 
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+  const getScrollThresholds = () => {
+    const viewport = Math.max(320, window.innerHeight);
+    const root = document.documentElement;
+    const maxScroll = Math.max(0, root.scrollHeight - viewport);
+
+    const hours = queryTarget(SECTIONS[1]);
+    const pay = queryTarget(SECTIONS[2]);
+    const totals = queryTarget(SECTIONS[4]);
+
+    const hoursTop = documentTop(hours);
+    const payTop = documentTop(pay);
+    const payBottom = payTop + (pay?.getBoundingClientRect().height || 0);
+    const totalsTop = documentTop(totals);
+
+    const entryLine = clamp(viewport * 0.35, 120, 340);
+    const payExitLine = clamp(viewport * 0.55, 190, 520);
+    const totalsLine = clamp(viewport * 0.6, 220, 560);
+
+    const minHoursSpan = viewport <= 760 ? 220 : 140;
+    const minPaySpan = viewport <= 760 ? 180 : 100;
+    const minInvoiceSpan = viewport <= 760 ? 130 : 70;
+
+    const rawHours = Math.max(0, hoursTop - entryLine);
+    const rawPay = Math.max(0, payTop - entryLine);
+    const rawInvoice = Math.max(0, payBottom - payExitLine);
+    const rawTotal = Math.max(0, totalsTop - totalsLine);
+
+    const totalStart = clamp(rawTotal, 0, Math.max(0, maxScroll - 2));
+    const invoiceStart = clamp(
+      Math.min(rawInvoice, totalStart - minInvoiceSpan),
+      0,
+      totalStart,
+    );
+    const payStart = clamp(
+      Math.min(rawPay, invoiceStart - minPaySpan),
+      0,
+      invoiceStart,
+    );
+    const hoursStart = clamp(
+      Math.min(rawHours, payStart - minHoursSpan),
+      0,
+      payStart,
+    );
+
+    return {
+      maxScroll,
+      hoursStart,
+      payStart,
+      invoiceStart,
+      totalStart,
+    };
+  };
+
   const scrollToPosition = (top) => {
     window.scrollTo({
       top: Math.max(0, top),
-      behavior: reducedMotion() ? "auto" : "smooth",
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
     });
   };
 
   const scrollToSection = (item) => {
-    const target = queryTarget(item);
-    if (!target) return;
+    const thresholds = getScrollThresholds();
 
-    const viewport = Math.max(320, window.innerHeight);
-    const normalOffset = Math.min(180, Math.max(96, viewport * 0.18));
+    if (item.key === "details") {
+      scrollToPosition(0);
+      return;
+    }
+
+    if (item.key === "hours") {
+      scrollToPosition(thresholds.hoursStart + 8);
+      return;
+    }
+
+    if (item.key === "pay") {
+      scrollToPosition(thresholds.payStart + 8);
+      return;
+    }
 
     if (item.key === "invoice") {
-      const totalTarget = queryTarget(SECTIONS[4]);
-      if (totalTarget) {
-        // Position the Total cards low enough in the viewport to expose the
-        // complete sticky invoice toolbar and give Invoice a clear range.
-        scrollToPosition(documentTop(totalTarget) - viewport * 0.7);
-        return;
-      }
+      scrollToPosition(thresholds.invoiceStart + 8);
+      return;
     }
 
     if (item.key === "summary") {
-      const totalTarget = queryTarget(SECTIONS[4]);
-      if (totalTarget) {
-        scrollToPosition(documentTop(totalTarget) - viewport * 0.18);
-        return;
-      }
+      const totals = queryTarget(item);
+      const preferredTop = totals
+        ? documentTop(totals) - Math.min(120, window.innerHeight * 0.16)
+        : thresholds.totalStart + 8;
+      scrollToPosition(Math.min(thresholds.maxScroll, preferredTop));
     }
-
-    scrollToPosition(documentTop(target) - normalOffset);
   };
 
   const makeSectionButton = (item, index, compact = false) => {
@@ -85,8 +143,11 @@
 
   const setActive = (key) => {
     if (!SECTIONS.some((item) => item.key === key)) return;
-    activeKey = key;
+    if (activeKey === key && document.querySelector(`[data-section="${key}"].active`)) {
+      return;
+    }
 
+    activeKey = key;
     document.querySelectorAll("[data-section]").forEach((button) => {
       const isActive = button.dataset.section === key;
       button.classList.toggle("active", isActive);
@@ -103,11 +164,27 @@
     progress?.setAttribute("aria-valuenow", String(Math.round(value * 100)));
   };
 
+  const syncActiveFromScroll = () => {
+    if (scrollFrame) return;
+
+    scrollFrame = window.requestAnimationFrame(() => {
+      scrollFrame = null;
+      const thresholds = getScrollThresholds();
+      const y = Math.min(thresholds.maxScroll, Math.max(0, window.scrollY));
+
+      if (y >= thresholds.totalStart) setActive("summary");
+      else if (y >= thresholds.invoiceStart) setActive("invoice");
+      else if (y >= thresholds.payStart) setActive("pay");
+      else if (y >= thresholds.hoursStart) setActive("hours");
+      else setActive("details");
+    });
+  };
+
   const syncTotal = () => {
     const total =
       document.querySelector(".grand-total strong")?.textContent?.trim() ||
       "£0.00";
-    if (grandTotal) grandTotal.textContent = total;
+    if (grandTotal && grandTotal.textContent !== total) grandTotal.textContent = total;
   };
 
   const syncIntro = () => {
@@ -115,65 +192,6 @@
     const nextText =
       "Add your hours, check your pay and download a ready-to-send PDF or Excel invoice.";
     if (intro && intro.textContent !== nextText) intro.textContent = nextText;
-  };
-
-  const syncActiveFromScroll = () => {
-    if (scrollFrame) return;
-
-    scrollFrame = window.requestAnimationFrame(() => {
-      scrollFrame = null;
-
-      const viewport = Math.max(320, window.innerHeight);
-      const root = document.documentElement;
-      const maxScroll = Math.max(0, root.scrollHeight - viewport);
-
-      const totalTarget = queryTarget(SECTIONS[4]);
-      const payTarget = queryTarget(SECTIONS[2]);
-      const hoursTarget = queryTarget(SECTIONS[1]);
-      const totalRect = totalTarget?.getBoundingClientRect();
-      const payRect = payTarget?.getBoundingClientRect();
-
-      // Total wins only near the totals cards or at the absolute page end.
-      if (
-        totalRect &&
-        (window.scrollY >= maxScroll - 10 || totalRect.top <= viewport * 0.22)
-      ) {
-        setActive("summary");
-        return;
-      }
-
-      // Keep Pay active while its card still occupies the reading area. The
-      // bottom bound is what prevents the nearby Invoice step from skipping it.
-      if (
-        payRect &&
-        payRect.top <= viewport * 0.38 &&
-        payRect.bottom > viewport * 0.2
-      ) {
-        setActive("pay");
-        return;
-      }
-
-      // Invoice begins once Pay has moved above the reading line and remains
-      // active until the totals themselves become the focus.
-      if (
-        totalRect &&
-        totalRect.top <= viewport * 0.72 &&
-        (!payRect || payRect.bottom <= viewport * 0.2)
-      ) {
-        setActive("invoice");
-        return;
-      }
-
-      if (
-        hoursTarget &&
-        hoursTarget.getBoundingClientRect().top <= viewport * 0.34
-      ) {
-        setActive("hours");
-        return;
-      }
-
-      setActive("details");
-    });
   };
 
   const buildRail = () => {
@@ -243,6 +261,11 @@
     );
   };
 
+  const handleViewportChange = () => {
+    updateProgress();
+    syncActiveFromScroll();
+  };
+
   const start = () => {
     if (document.documentElement.dataset.nextgenReady === "true") return;
     if (!document.querySelector(".invoice-details")) {
@@ -272,16 +295,12 @@
       characterData: true,
     });
 
-    const handleViewportChange = () => {
-      updateProgress();
-      syncActiveFromScroll();
-    };
-
     window.addEventListener("scroll", handleViewportChange, { passive: true });
     window.addEventListener("resize", handleViewportChange, { passive: true });
     window.addEventListener("orientationchange", handleViewportChange, {
       passive: true,
     });
+    window.addEventListener("pageshow", handleViewportChange, { passive: true });
   };
 
   start();
