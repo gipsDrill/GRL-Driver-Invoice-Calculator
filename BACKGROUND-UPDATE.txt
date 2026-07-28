@@ -1,0 +1,3 @@
+Background update
+
+Only the dark page background was made lighter. Layout, cards, calculations, exports and all other behaviour remain unchanged.
