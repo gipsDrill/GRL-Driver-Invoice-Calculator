@@ -20,7 +20,7 @@
   } catch (_) { /* Voice entry also works when browser storage is unavailable. */ }
   const COPY = {
     "pl-PL": {
-      heading: "GŁOS", panel: "Wprowadzanie głosem po polsku", close: "Zamknij wprowadzanie głosem",
+      heading: "GŁOS · v4", panel: "Wprowadzanie głosem po polsku", close: "Zamknij wprowadzanie głosem",
       language: "Język rozpoznawania mowy", microphone: "Wpisz głosem", tip: "Wpisz głosem po polsku",
       guideTitle: "Jak mówić?",
       guide: "Naciśnij mikrofon przy wybranym polu i ustaw PL lub EN. Powiedz jedną godzinę albo datę, np. „szósta trzydzieści rano”, „osiemnasta”, „wczoraj” lub „szesnasty listopada dwa tysiące dwadzieścia sześć”. Przy godzinach 1–12 dodaj „rano” lub „wieczorem”. Sprawdź wpisany wynik; w razie pomyłki użyj „Cofnij”.",
@@ -59,6 +59,8 @@
       dictationPlaceholder: "Np. szósta trzydzieści rano", applyDictation: "Wpisz tekst",
       dictationHelp: "Język dyktowania wybierz osobno na klawiaturze; PL/EN ustawia interpretację tekstu. Brak mikrofonu na iPhonie? Ustawienia → Ogólne → Klawiatura → Włącz dyktowanie.",
       emptyText: "Wpisz lub podyktuj jedną godzinę albo datę.", code: "Kod",
+      finishingDictation: "Czekam na zakończenie dyktowania…",
+      finishDictation: "Zakończ dyktowanie mikrofonem klawiatury, sprawdź tekst i naciśnij „Wpisz tekst” ponownie. Wartość pola nie została zmieniona.",
       startTimeout: "Mikrofon nie rozpoczął słuchania. Możesz użyć dyktowania klawiatury lub wpisać tekst.",
       errors: {
         "not-allowed": "Brak zgody na mikrofon lub rozpoznawanie mowy. Zezwól w ustawieniach strony. Na iPhonie sprawdź też, czy Siri jest włączona.",
@@ -71,7 +73,7 @@
       },
     },
     "en-GB": {
-      heading: "VOICE", panel: "Voice entry in English", close: "Close voice entry",
+      heading: "VOICE · v4", panel: "Voice entry in English", close: "Close voice entry",
       language: "Speech recognition language", microphone: "Enter by voice", tip: "Enter by voice in English",
       guideTitle: "What can I say?",
       guide: "Tap the microphone beside a field and choose PL or EN. Say one time or date, for example “six thirty AM”, “six PM”, “half past six in the morning”, “yesterday” or “16 November 2026”. Include AM or PM for hours 1–12. Numeric dates use UK day/month/year. Check the result and use Undo if needed.",
@@ -110,6 +112,8 @@
       dictationPlaceholder: "For example, six thirty AM", applyDictation: "Use text",
       dictationHelp: "Choose the dictation language separately on your keyboard; PL/EN controls text interpretation. No iPhone microphone? Settings → General → Keyboard → Enable Dictation.",
       emptyText: "Type or dictate one time or date.", code: "Code",
+      finishingDictation: "Waiting for dictation to finish…",
+      finishDictation: "Finish dictation using the keyboard microphone, check the text, then tap “Use text” again. The form value has not changed.",
       startTimeout: "The microphone did not start listening. You can use keyboard dictation or type the value.",
       errors: {
         "not-allowed": "Microphone or speech permission was denied. Allow access in site settings. On iPhone, also check that Siri is enabled.",
@@ -204,6 +208,7 @@
   }
 
   function release(current) {
+    clearDictationSubmit(current);
     clearTimeout(current?.startTimeout);
     clearTimeout(current?.timeout);
     clearTimeout(current?.finalTimeout);
@@ -394,15 +399,45 @@
     help.textContent = current.info.bulk && result.status === "ambiguous" ? result.message : copy.confirm;
   }
 
+  function clearDictationSubmit(current) {
+    const request = current?.dictationSubmit;
+    if (!request) return;
+    clearTimeout(request.quiet);
+    clearTimeout(request.deadline);
+    current.dictationSubmit = null;
+  }
+
+  function settleDictation(current) {
+    const request = current?.dictationSubmit;
+    if (!request) return;
+    clearTimeout(request.quiet);
+    if (session !== current || current.state !== "dictating" || composing) return;
+    request.quiet = setTimeout(() => {
+      if (session !== current || current.dictationSubmit !== request || current.state !== "dictating" || composing) return;
+      // Safari may commit the last words on blur or after compositionend. Read
+      // only after the final input settles, and only for this explicit request.
+      current.text = dictationInput.value.trim();
+      clearDictationSubmit(current);
+      interpret(current);
+    }, 120);
+  }
+
   function submitDictation() {
     const current = session;
-    if (!current || current.state !== "dictating" || current.method !== "dictation" || composing) return;
-    // Input/composition events never update the calculator. Only this explicit
-    // action passes the complete text through the same interpretation pipeline.
-    current.text = dictationInput.value.trim();
+    if (!current || current.state !== "dictating" || current.method !== "dictation" || current.dictationSubmit) return;
+    const request = {};
+    current.dictationSubmit = request;
+    message.textContent = COPY[current.language].finishingDictation;
+    request.deadline = setTimeout(() => {
+      if (session !== current || current.dictationSubmit !== request || current.state !== "dictating") return;
+      clearDictationSubmit(current);
+      // Keep the text and the apply button. A missing compositionend must never
+      // turn a plausible but unfinished utterance into payable hours.
+      message.textContent = COPY[current.language].finishDictation;
+    }, 2500);
     dictationInput.blur();
     dictationBox.querySelector('[data-voice-action="apply-dictation"]').focus({ preventScroll: true });
-    interpret(current);
+    settleDictation(current);
   }
 
   function start(input, button, method) {
@@ -548,8 +583,21 @@
 
   panel.querySelector('[data-voice-action="cancel"]').addEventListener("click", () => dismiss(true));
   panel.querySelector('[data-voice-action="apply-dictation"]').addEventListener("click", submitDictation);
-  dictationInput.addEventListener("compositionstart", () => { composing = true; });
-  dictationInput.addEventListener("compositionend", () => { composing = false; });
+  dictationInput.addEventListener("compositionstart", () => {
+    if (session?.state !== "dictating") return;
+    composing = true;
+    settleDictation(session);
+  });
+  dictationInput.addEventListener("compositionend", () => {
+    if (session?.state !== "dictating") return;
+    composing = false;
+    settleDictation(session);
+  });
+  dictationInput.addEventListener("input", (event) => {
+    if (session?.state !== "dictating") return;
+    if (event.isComposing) composing = true;
+    settleDictation(session);
+  });
   dictationInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229 && !composing) {
       event.preventDefault();

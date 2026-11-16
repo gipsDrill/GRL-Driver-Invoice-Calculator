@@ -36,6 +36,7 @@ async function mount(t, {
   standalone = false,
   autoRecognitionStart = true,
   controlledRecognitionTimers = false,
+  controlledDictationTimers = false,
 } = {}) {
   const sessions = [];
   const errors = [];
@@ -107,11 +108,15 @@ async function mount(t, {
         Object.defineProperty(window.navigator, "platform", { value: "iPhone" });
         Object.defineProperty(window.navigator, "maxTouchPoints", { value: 5 });
       }
-      if (controlledRecognitionTimers) {
+      if (controlledRecognitionTimers || controlledDictationTimers) {
         const realSetTimeout = window.setTimeout.bind(window);
         const realClearTimeout = window.clearTimeout.bind(window);
+        const interceptedDelays = new Set([
+          ...(controlledRecognitionTimers ? [60000, 20000] : []),
+          ...(controlledDictationTimers ? [120, 2500] : []),
+        ]);
         window.setTimeout = (callback, delay = 0, ...args) => {
-          if (delay !== 60000 && delay !== 20000) return realSetTimeout(callback, delay, ...args);
+          if (!interceptedDelays.has(delay)) return realSetTimeout(callback, delay, ...args);
           const timer = { id: 1000000 + recognitionTimers.length, delay, active: true, fire: () => callback(...args) };
           recognitionTimers.push(timer);
           return timer.id;
@@ -223,7 +228,8 @@ async function mount(t, {
   const submitDictation = async () => {
     assert.ok(action("apply-dictation"));
     action("apply-dictation").click();
-    await pause(45);
+    await waitFor(() => ["success", "choice", "error"].includes(document.getElementById("grl-voice-panel").dataset.state),
+      "completed dictation interpretation");
   };
   const pendingTimers = (delay) => recognitionTimers.filter((timer) => timer.active && timer.delay === delay);
   const fireTimer = async (delay) => {
@@ -829,7 +835,7 @@ test("dictation Enter respects IME composition and Escape restores the microphon
   await pause();
   assert.equal(start.value, "");
   text.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-  await pause(45);
+  await waitFor(() => start.value === "06:30" && app.action("undo"), "Enter submits the settled dictation text");
   assert.equal(start.value, "06:30");
   assert.equal(app.document.activeElement, app.action("undo"), "Enter keeps focus on the result action after the dictation input is hidden");
   text = await app.openDictation(start);
@@ -878,4 +884,139 @@ test("Web Speech allows sixty seconds to start then twenty seconds to listen and
   assert.equal(end.value, "");
   assert.ok(app.action("dictate"));
   assert.equal(silent.aborted, true);
+});
+
+function compositionText(app, field, text) {
+  field.dispatchEvent(new app.window.CompositionEvent("compositionstart", { bubbles: true }));
+  field.value = text;
+  field.dispatchEvent(new app.window.InputEvent("input", {
+    bubbles: true, inputType: "insertCompositionText", data: text, isComposing: true,
+  }));
+}
+
+function committedText(app, field, text) {
+  field.value = text;
+  field.dispatchEvent(new app.window.InputEvent("input", {
+    bubbles: true, inputType: "insertFromComposition", data: text, isComposing: false,
+  }));
+}
+
+test("composition regression: an explicit click completes a second composed entry instead of silently ignoring it", async (t) => {
+  const app = await mount(t, { isIOS: true, controlledDictationTimers: true });
+  const start = app.desktop("start");
+  await app.openDictation(start);
+  await app.fillDictation("szósta trzydzieści rano");
+  app.action("apply-dictation").click();
+  if (app.pendingTimers(120).length) await app.fireTimer(120);
+  else await pause(45); // The original v3 completes this non-composed first entry.
+  assert.equal(start.value, "06:30");
+
+  const end = app.desktop("end");
+  const text = await app.openDictation(end);
+  compositionText(app, text, "osiemnasta");
+  let blurred = false;
+  text.addEventListener("blur", () => {
+    blurred = true;
+    text.dispatchEvent(new app.window.CompositionEvent("compositionend", { bubbles: true }));
+    committedText(app, text, "osiemnasta dwadzieścia siedem");
+  }, { once: true });
+  app.action("apply-dictation").click();
+  assert.equal(blurred, true, "Explicit submit must request completion even while composing");
+  assert.equal(end.value, "", "The partial hour must not be accepted during completion");
+  await app.fireTimer(120);
+  assert.equal(end.value, "18:27");
+  assert.equal(start.value, "06:30");
+  assert.equal(app.sessions.length, 0);
+});
+
+test("composition regression: a final input after compositionend replaces the partial hour before application", async (t) => {
+  const app = await mount(t, { isIOS: true, controlledDictationTimers: true });
+  const end = app.desktop("end");
+  const text = await app.openDictation(end);
+  compositionText(app, text, "osiemnasta");
+  text.addEventListener("blur", () => {
+    text.dispatchEvent(new app.window.CompositionEvent("compositionend", { bubbles: true }));
+  }, { once: true });
+  app.action("apply-dictation").click();
+  assert.notEqual(app.document.activeElement, text, "The submit click ends editing even when Safari leaves buttons unfocused");
+  const earlierQuiet = app.pendingTimers(120)[0];
+  assert.ok(earlierQuiet);
+  assert.equal(end.value, "");
+  await pause(30);
+  committedText(app, text, "osiemnasta dwadzieścia siedem");
+  assert.equal(end.value, "", "Neither compositionend nor the final input may immediately commit an earlier value");
+  assert.equal(earlierQuiet.active, false, "The final input restarts the settling interval");
+  await app.fireTimer(120);
+  assert.equal(end.value, "18:27");
+});
+
+test("composition regression: a text correction committed on blur is read after blur, not before", async (t) => {
+  const app = await mount(t, { isIOS: true, controlledDictationTimers: true });
+  const end = app.desktop("end");
+  const text = await app.openDictation(end);
+  await app.fillDictation("osiemnasta");
+  text.addEventListener("blur", () => committedText(app, text, "osiemnasta dwadzieścia siedem"), { once: true });
+  app.action("apply-dictation").click();
+  assert.equal(end.value, "", "The stale pre-blur text must not become 18:00");
+  await app.fireTimer(120);
+  assert.equal(end.value, "18:27");
+});
+
+test("composition regression: a missing compositionend gives feedback and never applies a partial or late value", async (t) => {
+  const app = await mount(t, { isIOS: true, controlledDictationTimers: true });
+  const end = app.desktop("end");
+  await app.nativeEdit(end, "17:00");
+  const text = await app.openDictation(end);
+  compositionText(app, text, "osiemnasta");
+  app.action("apply-dictation").click();
+  assert.equal(end.value, "17:00");
+  if (app.pendingTimers(120).length) await app.fireTimer(120);
+  assert.equal(end.value, "17:00");
+  await app.fireTimer(2500);
+  assert.equal(end.value, "17:00");
+  assert.equal(text.value, "osiemnasta", "Unfinished dictation remains available for correction");
+  assert.match(app.document.querySelector(".grl-voice-message").textContent, /zakończ|dokończ|finish|complete/i);
+  assert.ok(app.action("apply-dictation"));
+
+  text.dispatchEvent(new app.window.CompositionEvent("compositionend", { bubbles: true }));
+  committedText(app, text, "osiemnasta dwadzieścia siedem");
+  await pause(30);
+  assert.equal(end.value, "17:00", "A late completion after timeout needs a new explicit submit");
+  assert.equal(app.pendingTimers(120).length, 0);
+  app.action("apply-dictation").click();
+  await app.fireTimer(120);
+  assert.equal(end.value, "18:27");
+});
+
+test("composition regression: pending completion cannot survive cancellation, a target change or a locale change", async (t) => {
+  for (const change of ["cancel", "target", "locale"]) {
+    const app = await mount(t, { isIOS: true, controlledDictationTimers: true });
+    const start = app.desktop("start");
+    const end = app.desktop("end");
+    const text = await app.openDictation(start);
+    compositionText(app, text, "szósta");
+    app.action("apply-dictation").click();
+    const pendingQuiet = app.pendingTimers(120)[0];
+    const pendingDeadline = app.pendingTimers(2500)[0];
+    assert.ok(pendingDeadline, "An explicit composing submit has a bounded pending completion");
+    if (change === "cancel") app.action("cancel").click();
+    else if (change === "target") await app.openDictation(end);
+    else await app.chooseLanguage("en-GB");
+
+    text.dispatchEvent(new app.window.CompositionEvent("compositionend", { bubbles: true }));
+    committedText(app, text, "szósta trzydzieści rano");
+    // Exercise callback guards as well as clearTimeout: a callback already
+    // delivered by the host must not act on a newer or dismissed session.
+    pendingQuiet?.fire();
+    pendingDeadline.fire();
+    await pause(45);
+    assert.equal(start.value, "", `${change}: original target is unchanged`);
+    assert.equal(end.value, "", `${change}: new target is unchanged`);
+    const panel = app.document.getElementById("grl-voice-panel");
+    if (change === "cancel") assert.equal(panel.hidden, true);
+    if (change === "target") assert.match(panel.querySelector("h2").textContent, /Koniec/);
+    if (change === "locale") assert.equal(panel.lang, "en");
+    assert.equal(app.pendingTimers(120).length, 0);
+    assert.equal(app.pendingTimers(2500).length, 0);
+  }
 });
