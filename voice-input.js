@@ -5,6 +5,9 @@
   if (!parser || document.getElementById("grl-voice-panel")) return;
 
   const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const defaultMethod = () => isIOS ? "dictation" : "speech";
   const buttons = new WeakMap();
   const DAYS = {
     Monday: "poniedziałek", Tuesday: "wtorek", Wednesday: "środa",
@@ -41,18 +44,25 @@
       confirm: "Wybierz poprawny wynik przed wpisaniem do formularza.",
       starting: "Uruchamiam mikrofon…",
       privacy: "Rozpoznawanie może wymagać internetu i przesyłać dźwięk do dostawcy przeglądarki. Kalkulator nie zapisuje nagrań.",
-      unsupported: "Ta przeglądarka nie udostępnia rozpoznawania mowy. Spróbuj Chrome na Androidzie lub Safari na iPhonie.",
+      unsupported: "Ta przeglądarka nie udostępnia rozpoznawania mowy. Użyj dyktowania klawiatury lub wpisz tekst.",
       https: "Otwórz kalkulator przez bezpieczny adres HTTPS, aby użyć mikrofonu.",
       listenTime: "Słucham. Powiedz np. „szósta trzydzieści rano” lub „osiemnasta”.",
       listenDate: "Słucham. Powiedz np. „wczoraj” lub pełną datę z rokiem.",
       noMatch: "Nie rozpoznałem daty ani godziny. Powtórz krótkie polecenie.",
       stop: "Zakończ słuchanie", processing: "Przetwarzam wypowiedź…",
-      timeout: "Mikrofon nie zwrócił wyniku. Sprawdź uprawnienia i internet; na iPhonie spróbuj otworzyć stronę bezpośrednio w Safari.",
+      timeout: "Mikrofon nie zwrócił wyniku. Użyj dyktowania klawiatury lub wpisz tekst. Możesz też sprawdzić uprawnienia i internet.",
       startError: "Nie można uruchomić mikrofonu. Sprawdź uprawnienia przeglądarki i spróbuj ponownie.",
       unknownError: "Rozpoznawanie mowy nie zadziałało. Spróbuj ponownie lub wpisz dane ręcznie.",
+      dictate: "Dyktuj klawiaturą / wpisz tekst", speech: "Spróbuj mikrofonu przeglądarki",
+      dictation: "Naciśnij mikrofon klawiatury telefonu lub wpisz tekst, potem wybierz „Wpisz tekst”.",
+      dictationLabel: "Godzina lub data — tekst z klawiatury",
+      dictationPlaceholder: "Np. szósta trzydzieści rano", applyDictation: "Wpisz tekst",
+      dictationHelp: "Język dyktowania wybierz osobno na klawiaturze; PL/EN ustawia interpretację tekstu. Brak mikrofonu na iPhonie? Ustawienia → Ogólne → Klawiatura → Włącz dyktowanie.",
+      emptyText: "Wpisz lub podyktuj jedną godzinę albo datę.", code: "Kod",
+      startTimeout: "Mikrofon nie rozpoczął słuchania. Możesz użyć dyktowania klawiatury lub wpisać tekst.",
       errors: {
         "not-allowed": "Brak zgody na mikrofon lub rozpoznawanie mowy. Zezwól w ustawieniach strony. Na iPhonie sprawdź też, czy Siri jest włączona.",
-        "service-not-allowed": "Rozpoznawanie jest niedostępne w tej przeglądarce. Na iPhonie otwórz stronę w Safari i sprawdź ustawienia Siri.",
+        "service-not-allowed": "Rozpoznawanie jest niedostępne w tej przeglądarce. Użyj dyktowania klawiatury lub wpisz tekst.",
         "audio-capture": "Mikrofon jest niedostępny. Sprawdź uprawnienia i czy inna aplikacja go nie używa.",
         network: "Nie udało się połączyć z usługą rozpoznawania. Sprawdź internet i spróbuj ponownie.",
         "no-speech": "Nie usłyszałem wypowiedzi. Spróbuj ponownie bliżej mikrofonu.",
@@ -85,18 +95,25 @@
       confirm: "Choose the correct result before it is entered into the form.",
       starting: "Starting the microphone…",
       privacy: "Recognition may need internet access and send audio to your browser's provider. The calculator does not save recordings.",
-      unsupported: "This browser does not provide speech recognition. Try Chrome on Android or Safari on iPhone.",
+      unsupported: "This browser does not provide speech recognition. Use keyboard dictation or type the value.",
       https: "Open the calculator using its secure HTTPS address to use the microphone.",
       listenTime: "Listening. Say, for example, “six thirty AM” or “eighteen thirty”.",
       listenDate: "Listening. Say “yesterday” or a full date with a year. Numeric dates use UK day/month order.",
       noMatch: "No date or time was recognised. Repeat a short command.",
       stop: "Stop listening", processing: "Processing your speech…",
-      timeout: "The microphone returned no result. Check permissions and internet access; on iPhone, try opening the page directly in Safari.",
+      timeout: "The microphone returned no result. Use keyboard dictation or type the value. You can also check permissions and internet access.",
       startError: "The microphone could not start. Check browser permissions and try again.",
       unknownError: "Speech recognition failed. Try again or enter the value manually.",
+      dictate: "Keyboard dictation / type text", speech: "Try the browser microphone",
+      dictation: "Tap your phone keyboard's microphone or type, then choose “Use text”.",
+      dictationLabel: "Time or date — text from your keyboard",
+      dictationPlaceholder: "For example, six thirty AM", applyDictation: "Use text",
+      dictationHelp: "Choose the dictation language separately on your keyboard; PL/EN controls text interpretation. No iPhone microphone? Settings → General → Keyboard → Enable Dictation.",
+      emptyText: "Type or dictate one time or date.", code: "Code",
+      startTimeout: "The microphone did not start listening. You can use keyboard dictation or type the value.",
       errors: {
         "not-allowed": "Microphone or speech permission was denied. Allow access in site settings. On iPhone, also check that Siri is enabled.",
-        "service-not-allowed": "Speech recognition is unavailable in this browser. On iPhone, open the page in Safari and check Siri settings.",
+        "service-not-allowed": "Speech recognition is unavailable in this browser. Use keyboard dictation or type the value.",
         "audio-capture": "The microphone is unavailable. Check permissions and whether another app is using it.",
         network: "The recognition service could not be reached. Check your internet connection and try again.",
         "no-speech": "No speech was heard. Try again closer to the microphone.",
@@ -110,11 +127,12 @@
   let undo = null;
   let applying = false;
   let scheduled = false;
+  let composing = false;
 
   const panel = document.createElement("section");
   panel.id = "grl-voice-panel";
   panel.hidden = true;
-  panel.innerHTML = '<div class="grl-voice-heading"><span></span><select id="grl-voice-language"><option value="pl-PL" lang="pl">PL · Polski</option><option value="en-GB" lang="en">EN · English (UK)</option></select><button type="button" data-voice-action="cancel">×</button></div><h2></h2><p class="grl-voice-message" role="status" aria-live="polite" aria-atomic="true"></p><p class="grl-voice-transcript"></p><div class="grl-voice-actions"></div><details class="grl-voice-guide"><summary></summary><p></p></details><p class="grl-voice-help"></p>';
+  panel.innerHTML = '<div class="grl-voice-heading"><span></span><select id="grl-voice-language"><option value="pl-PL" lang="pl">PL · Polski</option><option value="en-GB" lang="en">EN · English (UK)</option></select><button type="button" data-voice-action="cancel">×</button></div><h2></h2><p class="grl-voice-message" role="status" aria-live="polite" aria-atomic="true"></p><p class="grl-voice-transcript"></p><div class="grl-voice-dictation-wrap" hidden><label for="grl-voice-dictation"></label><div class="grl-voice-dictation-row"><input id="grl-voice-dictation" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"/><button type="button" data-voice-action="apply-dictation"></button></div></div><p class="grl-voice-code"></p><div class="grl-voice-actions"></div><details class="grl-voice-guide"><summary></summary><p></p></details><p class="grl-voice-help"></p>';
   document.body.append(panel);
   const title = panel.querySelector("h2");
   const message = panel.querySelector(".grl-voice-message");
@@ -122,6 +140,9 @@
   const actions = panel.querySelector(".grl-voice-actions");
   const help = panel.querySelector(".grl-voice-help");
   const languageSelect = panel.querySelector("#grl-voice-language");
+  const dictationBox = panel.querySelector(".grl-voice-dictation-wrap");
+  const dictationInput = panel.querySelector("#grl-voice-dictation");
+  const errorCode = panel.querySelector(".grl-voice-code");
 
   function syncLanguage() {
     const copy = COPY[language];
@@ -133,6 +154,10 @@
     languageSelect.value = language;
     panel.querySelector(".grl-voice-guide summary").textContent = copy.guideTitle;
     panel.querySelector(".grl-voice-guide p").textContent = copy.guide;
+    dictationInput.lang = language;
+    dictationInput.placeholder = copy.dictationPlaceholder;
+    dictationBox.querySelector("label").textContent = copy.dictationLabel;
+    dictationBox.querySelector('[data-voice-action="apply-dictation"]').textContent = copy.applyDictation;
   }
   syncLanguage();
 
@@ -179,6 +204,7 @@
   }
 
   function release(current) {
+    clearTimeout(current?.startTimeout);
     clearTimeout(current?.timeout);
     clearTimeout(current?.finalTimeout);
     if (!current) return;
@@ -198,6 +224,10 @@
     session = null;
     undo = null;
     panel.hidden = true;
+    dictationBox.hidden = true;
+    dictationInput.value = "";
+    composing = false;
+    if (document.activeElement === dictationInput) dictationInput.blur();
     if (restoreFocus && button?.isConnected) button.focus({ preventScroll: true });
   }
 
@@ -216,25 +246,43 @@
     current.restorePanelFocus = panel.contains(document.activeElement) || document.activeElement === current.button;
     panel.hidden = false;
     panel.dataset.state = current.state;
+    panel.dataset.method = current.method;
+    panel.dataset.errorCode = current.errorCode || "";
     title.textContent = current.info.label;
     message.textContent = text;
     transcript.textContent = current.text ? COPY[current.language].heard(current.text) : "";
+    dictationBox.hidden = current.state !== "dictating";
+    errorCode.textContent = current.errorCode ? `${COPY[current.language].code}: ${current.errorCode}` : "";
     actions.replaceChildren();
+    fitDictationViewport();
+  }
+
+  // iOS keeps the layout viewport behind its keyboard. Position only the text
+  // fallback inside the visible viewport; the panel can scroll when space is tight.
+  function fitDictationViewport() {
+    if (panel.hidden || panel.dataset.method !== "dictation") return;
+    const viewport = window.visualViewport;
+    panel.style.setProperty("--grl-voice-visible-top", `${Math.max(0, viewport?.offsetTop || 0) + 12}px`);
+    panel.style.setProperty("--grl-voice-visible-height", `${Math.max(120, (viewport?.height || window.innerHeight) - 24)}px`);
   }
 
   function focusAction(current, force = false) {
     if (force || current.restorePanelFocus) actions.querySelector("button")?.focus({ preventScroll: true });
   }
 
-  function fail(current, text) {
+  function fail(current, text, code = "") {
     if (session !== current) return;
     release(current);
     current.state = "error";
+    current.errorCode = String(code).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48);
     show(current, text);
     const copy = COPY[current.language];
-    action(copy.retry, "retry", () => start(current.input, current.button));
+    action(copy.retry, "retry", () => start(current.input, current.button, current.method));
+    action(current.method === "dictation" ? copy.speech : copy.dictate,
+      current.method === "dictation" ? "speech" : "dictate",
+      () => start(current.input, current.button, current.method === "dictation" ? "speech" : "dictation"));
     focusAction(current);
-    help.textContent = copy.manual;
+    help.textContent = current.method === "dictation" ? copy.dictationHelp : copy.manual;
   }
 
   function setField(input, value) {
@@ -307,10 +355,14 @@
   }
 
   function interpret(current) {
-    if (session !== current || current.state !== "listening") return;
+    if (session !== current || !["listening", "dictating"].includes(current.state)) return;
     release(current);
     const copy = COPY[current.language];
-    if (!current.text) { fail(current, copy.empty); return; }
+    if (!current.text) {
+      fail(current, current.method === "dictation" ? copy.emptyText : copy.empty,
+        current.method === "dictation" ? "" : "no-final-result");
+      return;
+    }
     if (!intact(current)) { fail(current, copy.changed); return; }
     const normalized = parser.normalize(current.text);
     const endPrefix = current.language === "en-GB" ? /^(end|finish|to)\b/ : /^(koniec|zakonczenie)\b/;
@@ -337,42 +389,72 @@
     for (const choice of choices) {
       action(`${copy.use} ${format(choice.value, current.info.type, current.language)}`, "apply", () => apply(current, choice.value), choice.value);
     }
-    action(copy.repeat, "retry", () => start(current.input, current.button));
+    action(copy.repeat, "retry", () => start(current.input, current.button, current.method));
     focusAction(current, true);
     help.textContent = current.info.bulk && result.status === "ambiguous" ? result.message : copy.confirm;
   }
 
-  function start(input, button) {
-    if (session?.button === button && session.state === "listening") { dismiss(true); return; }
+  function submitDictation() {
+    const current = session;
+    if (!current || current.state !== "dictating" || current.method !== "dictation" || composing) return;
+    // Input/composition events never update the calculator. Only this explicit
+    // action passes the complete text through the same interpretation pipeline.
+    current.text = dictationInput.value.trim();
+    dictationInput.blur();
+    dictationBox.querySelector('[data-voice-action="apply-dictation"]').focus({ preventScroll: true });
+    interpret(current);
+  }
+
+  function start(input, button, method) {
+    if (!method && session?.button === button && ["listening", "dictating"].includes(session.state)) { dismiss(true); return; }
     const enteredFromPanel = panel.contains(document.activeElement);
     dismiss();
     const info = describe(input);
     if (!info || input.disabled || input.readOnly) return;
     const current = { input, button, info, previous: input.value, before: snapshot(input, info),
-      view: weekView(), language, state: "listening", text: "", recognition: null };
+      view: weekView(), language, method: method || defaultMethod(), state: "listening", text: "", recognition: null };
     const copy = COPY[current.language];
     session = current;
+    if (current.method === "dictation") {
+      current.state = "dictating";
+      show(current, copy.dictation);
+      help.textContent = copy.dictationHelp;
+      button.setAttribute("aria-pressed", "true");
+      action(copy.speech, "speech", () => start(input, button, "speech"));
+      // Keep focus synchronous with the user's tap: iOS otherwise may not open
+      // its keyboard. The user starts keyboard dictation with its own microphone.
+      dictationInput.focus();
+      return;
+    }
     show(current, copy.starting);
     help.textContent = copy.privacy;
-    if (!Speech) { fail(current, copy.unsupported); return; }
+    if (!Speech) { fail(current, copy.unsupported, "unsupported"); return; }
     if (!window.isSecureContext && location.protocol !== "file:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
-      fail(current, copy.https); return;
+      fail(current, copy.https, "insecure-context"); return;
     }
     try {
       const recognition = new Speech();
       current.recognition = recognition;
+      const active = () => session === current && current.state === "listening" && current.recognition === recognition;
       recognition.lang = current.language;
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
       recognition.onstart = () => {
-        if (session !== current) return;
+        if (!active() || current.started) return;
+        current.started = true;
+        clearTimeout(current.startTimeout);
         button.classList.add("is-listening");
         button.setAttribute("aria-pressed", "true");
         message.textContent = current.info.type === "time" ? copy.listenTime : copy.listenDate;
+        current.timeout = setTimeout(() => {
+          if (!active()) return;
+          if (current.text) interpret(current);
+          else fail(current, copy.timeout, "no-result-timeout");
+        }, 20000);
       };
       recognition.onresult = (event) => {
-        if (session !== current || current.state !== "listening") return;
+        if (!active()) return;
         const finalParts = [], interimParts = [];
         for (let index = 0; index < event.results.length; index++) {
           const result = event.results[index];
@@ -386,23 +468,22 @@
           current.finalTimeout = setTimeout(() => interpret(current), 800);
         }
       };
-      recognition.onend = () => interpret(current);
-      recognition.onnomatch = () => fail(current, copy.noMatch);
-      recognition.onerror = (event) => fail(current, copy.errors[event.error] || copy.unknownError);
+      recognition.onend = () => { if (active()) interpret(current); };
+      recognition.onnomatch = () => { if (active()) fail(current, copy.noMatch, "no-match"); };
+      recognition.onerror = (event) => { if (active()) fail(current, copy.errors[event.error] || copy.unknownError, event.error || "recognition-error"); };
       action(copy.stop, "stop", () => {
         if (session !== current || !current.recognition) return;
         message.textContent = copy.processing;
         try { current.recognition.stop(); } catch (_) { interpret(current); }
       });
       if (enteredFromPanel) focusAction(current, true);
-      current.timeout = setTimeout(() => {
-        if (current.text) interpret(current);
-        else fail(current, copy.timeout);
-      }, 20000);
+      current.startTimeout = setTimeout(() => {
+        if (active() && !current.started) fail(current, copy.startTimeout, "start-timeout");
+      }, 60000);
       // Must run in the user's click handler; never start in a timer or on page load.
       recognition.start();
-    } catch (_) {
-      fail(current, copy.startError);
+    } catch (error) {
+      fail(current, copy.startError, `start-${error?.name || "error"}`);
     }
   }
 
@@ -436,7 +517,7 @@
       input.parentElement.append(button); // Do not reparent a React-owned input.
       buttons.set(input, button);
     });
-    if (session && ["listening", "choice", "ready"].includes(session.state) && !intact(session)) dismiss();
+    if (session && ["listening", "dictating", "choice", "ready"].includes(session.state) && !intact(session)) dismiss();
   }
 
   languageSelect.addEventListener("change", () => {
@@ -451,17 +532,30 @@
     const { input, button } = previous;
     const info = describe(input);
     if (!info) return;
+    if (previous.method === "dictation") {
+      start(input, button, "dictation");
+      return;
+    }
     const current = { input, button, info, language, previous: input.value,
-      before: snapshot(input, info), view: weekView(), state: "ready", text: "", recognition: null };
+      before: snapshot(input, info), view: weekView(), method: "speech", state: "ready", text: "", recognition: null };
     session = current;
     const copy = COPY[language];
     show(current, copy.ready);
-    action(copy.speak, "retry", () => start(input, button));
+    action(copy.speak, "retry", () => start(input, button, current.method));
     help.textContent = copy.privacy;
     focusAction(current, true);
   });
 
   panel.querySelector('[data-voice-action="cancel"]').addEventListener("click", () => dismiss(true));
+  panel.querySelector('[data-voice-action="apply-dictation"]').addEventListener("click", submitDictation);
+  dictationInput.addEventListener("compositionstart", () => { composing = true; });
+  dictationInput.addEventListener("compositionend", () => { composing = false; });
+  dictationInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229 && !composing) {
+      event.preventDefault();
+      submitDictation();
+    }
+  });
   document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !panel.hidden) dismiss(true); });
   document.addEventListener("visibilitychange", () => { if (document.hidden) dismiss(); });
   window.addEventListener("pagehide", () => dismiss());
@@ -470,10 +564,13 @@
     if (event.target.closest(".week-switch, .floating-week-nav, .action-bar")) dismiss();
   }, true);
   const manualEdit = (event) => {
-    if (!applying && session && ["listening", "choice", "ready"].includes(session.state) && event.target.closest("#root")) dismiss();
+    if (!applying && session && ["listening", "dictating", "choice", "ready"].includes(session.state) && event.target.closest("#root")) dismiss();
   };
   document.addEventListener("input", manualEdit, true);
   document.addEventListener("change", manualEdit, true);
+  window.visualViewport?.addEventListener("resize", fitDictationViewport);
+  window.visualViewport?.addEventListener("scroll", fitDictationViewport);
+  window.addEventListener("resize", fitDictationViewport);
   const observer = new MutationObserver(() => {
     if (scheduled) return;
     scheduled = true;

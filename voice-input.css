@@ -101,6 +101,47 @@ td.grl-voice-field > .grl-voice-button {
   overflow-wrap: anywhere;
 }
 #grl-voice-panel .grl-voice-transcript:empty { display: none; }
+#grl-voice-panel .grl-voice-code:empty,
+#grl-voice-panel .grl-voice-dictation-wrap[hidden] { display: none; }
+#grl-voice-panel .grl-voice-code {
+  color: #6d6264;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+#grl-voice-panel[data-method="dictation"] {
+  top: var(--grl-voice-visible-top, 12px);
+  bottom: auto;
+  max-height: min(520px, var(--grl-voice-visible-height, calc(100dvh - 24px)));
+}
+#grl-voice-panel .grl-voice-dictation-wrap > label {
+  display: block;
+  margin-bottom: 6px;
+  color: #675b61;
+  font-size: 13px;
+}
+#grl-voice-panel .grl-voice-dictation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+}
+#grl-voice-dictation {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px;
+  border: 1px solid #b58a99;
+  border-radius: 10px;
+  background: #fff;
+  color: #231f20;
+  font: inherit;
+  font-size: 16px;
+}
+#grl-voice-dictation:focus {
+  outline: 2px solid #702544;
+  outline-offset: 2px;
+}
 #grl-voice-panel .grl-voice-guide {
   margin-top: 12px;
   padding-top: 8px;
@@ -150,7 +191,8 @@ td.grl-voice-field > .grl-voice-button {
   gap: 8px;
   margin-top: 12px;
 }
-#grl-voice-panel [data-voice-action="apply"] {
+#grl-voice-panel [data-voice-action="apply"],
+#grl-voice-panel [data-voice-action="apply-dictation"] {
   flex: 1 0 auto;
   background: #54152f;
   border-color: #54152f;

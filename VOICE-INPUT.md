@@ -1,8 +1,8 @@
 # Wprowadzanie dat i godzin głosem — PL / EN
 
-Przy polach daty, Start i End znajduje się mikrofon. Naciśnij go, zezwól przeglądarce na mikrofon i powiedz krótkie polecenie w wybranym języku. Jedno nagranie dotyczy jednego wybranego pola.
+Przy polach daty, Start i End znajduje się mikrofon. Naciśnij go, aby wprowadzić jedną godzinę lub datę w wybranym języku. Na iPhonie lub iPadzie panel domyślnie korzysta z dyktowania klawiaturą systemową — zarówno w Safari lub Edge, jak i po otwarciu z ikony na ekranie głównym. Na innych urządzeniach rozpoznawanie przeglądarki uruchamia się po zgodzie na mikrofon.
 
-W panelu mikrofonu wybierz **PL · Polski** lub **EN · English (UK)**. Wybór jest zapamiętywany na urządzeniu. Zmiana języka przerywa aktualne słuchanie i usuwa oczekujący wynik. Naciśnij **Powiedz po polsku / Speak in English**, aby rozpocząć nową wypowiedź. Jednocześnie działa tylko jedna sesja rozpoznawania w wybranym języku.
+W panelu mikrofonu wybierz **PL · Polski** lub **EN · English (UK)**. Wybór jest zapamiętywany na urządzeniu. Zmiana języka przerywa aktualne rozpoznawanie przeglądarki i usuwa oczekujący wynik. Rozpocznij nową wypowiedź w wybranym języku. Jednocześnie obsługiwane jest tylko jedno wybrane pole.
 
 Krótka, rozwijana ściąga **Jak mówić? / What can I say?** w panelu zawiera przykłady, wskazówkę o porze dnia oraz informację o sprawdzeniu i cofnięciu wyniku. Główny formularz, jego oryginalny styl i kod obliczeń, zapisu oraz eksportu pozostają zachowane; dodane style dotyczą tylko kontrolek głosowych i ich miejsc przy polach.
 
@@ -38,21 +38,37 @@ Pola **Week ending (Sunday)** wymagają potwierdzenia i przyjmują wyłącznie n
 
 Po wpisaniu danych naciśnij **Calculate All**, jak przy ręcznym wprowadzaniu. **Save** zapisuje formularz na urządzeniu; samo dyktowanie nie włącza automatycznego zapisywania ani nie tworzy faktury.
 
+## iPhone / iPad — Safari, Edge i ikona na ekranie głównym
+
+Strona z manifestem `display: standalone` uruchamia się z ekranu głównego jako osobna aplikacja internetowa, także gdy ikonę dodano przez Edge. Rozpoznawanie mowy przez przeglądarkowe API ma ograniczenia i zgłoszone błędy zależne od wersji iOS, w tym przypadki, gdy pierwsza wypowiedź działa, a kolejne nie zwracają wyniku. Takie objawy zgłoszono również w zwykłym Safari. Dlatego na iPhonie i iPadzie panel wybiera domyślnie systemowe dyktowanie do zwykłego pola tekstowego:
+
+1. Naciśnij mikrofon przy wybranym polu **Start**, **End** lub dacie.
+2. Wybierz **PL** albo **EN** w panelu. Na klawiaturze telefonu wybierz również odpowiedni język, korzystając z przycisku globusa, jeśli potrzebny.
+3. Naciśnij **mikrofon na klawiaturze iPhone’a** i powiedz np. „szósta trzydzieści rano” albo “six thirty AM”.
+4. Zakończ dyktowanie, sprawdź tekst i naciśnij **Wpisz tekst / Use text** w panelu kalkulatora.
+5. Jeśli godzina jest niejednoznaczna, wybierz właściwy wariant. Po wpisaniu nadal działa **Cofnij / Undo**.
+
+Jeśli klawiatura nie pokazuje mikrofonu, sprawdź **Ustawienia → Ogólne → Klawiatura → Włącz dyktowanie** (*Settings → General → Keyboard → Enable Dictation*). Strona nie może samodzielnie nacisnąć systemowego mikrofonu ani włączyć ustawienia iOS. Język wybrany w kalkulatorze określa interpretację słów; język dyktowania zależy także od wybranej klawiatury.
+
+Tekst dyktowania może pojawiać się częściami. Dlatego dopiero **Wpisz tekst / Use text** uruchamia parser i zmienia docelowe pole, a nie każde dopisane słowo. W tym samym polu można poprawić tekst, wpisać go ręcznie albo wkleić. Dostępny jest również przycisk pozwalający spróbować rozpoznawania przeglądarki.
+
+Na urządzeniach innych niż iPhone/iPad dotychczasowy tryb głosowy pozostaje domyślny. Jeżeli usługa rozpoznawania jest niedostępna lub zgłasza błąd, panel udostępnia tę samą alternatywę z klawiaturą.
+
 ## Telefony i prywatność
 
 - Rozpoznawanie używa polskiego (`pl-PL`) lub brytyjskiego angielskiego (`en-GB`). Wskazówki panelu i etykiety mikrofonów zmieniają się wraz z wyborem języka mowy. Podstawowy interfejs kalkulatora zachowuje swój język i działanie.
-- Wymagana jest obsługa `SpeechRecognition` albo `webkitSpeechRecognition`. Rozsądnym punktem startu jest Chrome na Androidzie lub Safari na iPhonie. Dostępność zależy od urządzenia i przeglądarki.
-- W Safari sprawdź zgodę na mikrofon oraz włączenie Siri w ustawieniach urządzenia. Jeżeli skrót z ekranu głównego nie działa, otwórz stronę bezpośrednio w Safari.
-- Rozpoznawanie może wymagać internetu. Przeglądarka może wysłać dźwięk do własnego dostawcy rozpoznawania. Kalkulator nie zapisuje nagrań ani transkrypcji w pamięci trwałej i nie dodaje własnej usługi przesyłania dźwięku.
-- Mikrofon uruchamia się tylko po naciśnięciu przycisku. Zamknięcie panelu, ponowne naciśnięcie mikrofonu, zmiana tygodnia lub ukrycie strony kończą sesję. Sesja bez wyniku wygasa po 20 sekundach.
+- Bezpośrednie rozpoznawanie wymaga `SpeechRecognition` albo `webkitSpeechRecognition`. Alternatywne dyktowanie klawiaturą nie używa tego API. Dostępność obu metod zależy od urządzenia i ustawień.
+- W Safari sprawdź zgodę na mikrofon oraz ustawienia Siri lub dyktowania. Porównanie zwykłej karty Safari z aplikacją otwieraną z ikony pomaga ustalić przyczynę problemu, ale samo otwarcie Safari nie gwarantuje rozpoznania.
+- Rozpoznawanie może wymagać internetu. Przeglądarka albo system telefonu może wysłać dźwięk do swojego dostawcy rozpoznawania. Kalkulator nie zapisuje nagrań ani transkrypcji w pamięci trwałej i nie dodaje własnej usługi przesyłania dźwięku. Nie gwarantuje dyktowania offline w każdym języku.
+- Bezpośredni mikrofon uruchamia się tylko po naciśnięciu przycisku. Oczekiwanie na start lub zgodę ma osobny limit 60 sekund; limit 20 sekund słuchania rozpoczyna się dopiero po uruchomieniu rozpoznawania. Zamknięcie panelu, zmiana tygodnia, ręczna zmiana formularza lub ukrycie strony unieważniają oczekujący wynik. Systemowe dyktowanie klawiatury uruchamia i kończy użytkownik przez kontrolki iOS.
 - Ręczne wpisywanie pozostaje dostępne. Nie ma gwarancji bezbłędnego rozpoznania w hałasie; sprawdź wynik przed obliczeniem i wystawieniem faktury.
 
 ## Pliki i weryfikacja dla programisty
 
 - `voice-parser.js`: niezależny, konserwatywny parser całej wypowiedzi; brak usług sieciowych.
-- `voice-input.js`: przyciski, zarządzanie sesją, interpretacja wyników końcowych, cofanie i integracja z istniejącymi zdarzeniami pól React. Nie przenosi istniejących elementów pól.
+- `voice-input.js`: przyciski, zarządzanie sesją, rozpoznawanie przeglądarki i alternatywne dyktowanie klawiaturą, interpretacja końcowego tekstu, cofanie i integracja z istniejącymi zdarzeniami pól React. Nie przenosi istniejących elementów pól. Panel zachowuje krótki kod błędu, odróżniając także brak startu od braku wyniku, bez zapisu nagrań.
 - `voice-input.css`: dopasowany interfejs; na telefonie cel dotykowy mikrofonu ma 44 × 44 px.
-- `sw.js`: cache v7 obejmuje nowe pliki PL/EN w wersji `?v=2`. Usuwane są wyłącznie stare cache tego kalkulatora, a nie innych aplikacji w tej samej domenie.
+- `sw.js`: cache v8 obejmuje pliki PL/EN w wersji `?v=3`, aby urządzenia pobrały poprawkę. Usuwane są wyłącznie stare cache tego kalkulatora, a nie innych aplikacji w tej samej domenie.
 
 Testy parsera (bez zależności):
 
@@ -60,7 +76,7 @@ Testy parsera (bez zależności):
 node --test tests/voice-parser.test.cjs tests/voice-parser-en.test.cjs
 ```
 
-Testy integracyjne uruchamiają rzeczywisty pakiet React z `index.html` w JSDOM i symulują zdarzenia przeglądarkowego rozpoznawania mowy. Wymagają Node.js 24 i zależności wyłącznie do testów:
+Testy integracyjne uruchamiają rzeczywisty pakiet React z `index.html` w JSDOM. Symulują zarówno zdarzenia przeglądarkowego rozpoznawania mowy, jak i tekst dostarczany przez dyktowanie klawiaturą. Wymagają Node.js 24 i zależności wyłącznie do testów:
 
 ```sh
 npm install --no-save --no-package-lock jsdom@31.0.1
@@ -74,3 +90,7 @@ Dokumentacja dostawców:
 - [MDN: SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition)
 - [MDN: język rozpoznawania](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition/lang)
 - [WebKit: rozpoznawanie mowy w Safari i wymaganie Siri](https://webkit.org/blog/11648/new-webkit-features-in-safari-14-1/)
+- [WebKit: aplikacje z ekranu głównego, także dodane przez inne przeglądarki](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)
+- [Apple: dyktowanie tekstu na iPhonie](https://support.apple.com/en-gb/guide/iphone/iph2c0651d2/ios)
+- [WebKit 225298: historyczne ograniczenie Home Screen](https://bugs.webkit.org/show_bug.cgi?id=225298)
+- [WebKit 321436: zgłoszenia problemów rozpoznawania w Safari i Home Screen](https://bugs.webkit.org/show_bug.cgi?id=321436)

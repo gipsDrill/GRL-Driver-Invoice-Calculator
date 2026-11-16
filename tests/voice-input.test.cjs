@@ -28,9 +28,18 @@ function speechEvent(transcript, isFinal = true) {
   return { resultIndex: 0, results: [result] };
 }
 
-async function mount(t, { speech = true, storage = {} } = {}) {
+async function mount(t, {
+  speech = true,
+  storage = {},
+  isIOS = false,
+  isIPadOS = false,
+  standalone = false,
+  autoRecognitionStart = true,
+  controlledRecognitionTimers = false,
+} = {}) {
   const sessions = [];
   const errors = [];
+  const recognitionTimers = [];
   const virtualConsole = new VirtualConsole();
   virtualConsole.on("jsdomError", (error) => errors.push(error.message));
   virtualConsole.on("error", (...args) => errors.push(args.join(" ")));
@@ -43,7 +52,7 @@ async function mount(t, { speech = true, storage = {} } = {}) {
     }
     start() {
       this.started = true;
-      queueMicrotask(() => this.onstart?.({}));
+      if (autoRecognitionStart) queueMicrotask(() => this.onstart?.({}));
     }
     stop() {
       this.stopped = true;
@@ -77,13 +86,42 @@ async function mount(t, { speech = true, storage = {} } = {}) {
       window.scrollTo = () => {};
       window.HTMLElement.prototype.scrollIntoView = () => {};
       window.matchMedia = (query) => ({
-        matches: false,
+        matches: standalone && /\(display-mode:\s*standalone\)/.test(query),
         media: query,
         addListener() {},
         removeListener() {},
         addEventListener() {},
         removeEventListener() {},
       });
+      Object.defineProperty(window.navigator, "standalone", { value: standalone });
+      if (isIPadOS) {
+        Object.defineProperty(window.navigator, "userAgent", {
+          value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+        });
+        Object.defineProperty(window.navigator, "platform", { value: "MacIntel" });
+        Object.defineProperty(window.navigator, "maxTouchPoints", { value: 5 });
+      } else if (isIOS) {
+        Object.defineProperty(window.navigator, "userAgent", {
+          value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/140.0.0 Mobile/15E148 Safari/605.1.15",
+        });
+        Object.defineProperty(window.navigator, "platform", { value: "iPhone" });
+        Object.defineProperty(window.navigator, "maxTouchPoints", { value: 5 });
+      }
+      if (controlledRecognitionTimers) {
+        const realSetTimeout = window.setTimeout.bind(window);
+        const realClearTimeout = window.clearTimeout.bind(window);
+        window.setTimeout = (callback, delay = 0, ...args) => {
+          if (delay !== 60000 && delay !== 20000) return realSetTimeout(callback, delay, ...args);
+          const timer = { id: 1000000 + recognitionTimers.length, delay, active: true, fire: () => callback(...args) };
+          recognitionTimers.push(timer);
+          return timer.id;
+        };
+        window.clearTimeout = (id) => {
+          const timer = recognitionTimers.find((entry) => entry.id === id);
+          if (timer) timer.active = false;
+          else realClearTimeout(id);
+        };
+      }
       window.CSS ||= {};
       window.CSS.escape = (value) => String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
       Object.defineProperty(window, "isSecureContext", { value: true });
@@ -166,8 +204,38 @@ async function mount(t, { speech = true, storage = {} } = {}) {
     assert.equal(recognition.started, true);
     return recognition;
   };
+  const openDictation = async (input) => {
+    input.parentElement.querySelector(".grl-voice-button").click();
+    await waitFor(() => action("apply-dictation"), "system dictation entry");
+    await pause();
+    const field = document.getElementById("grl-voice-dictation");
+    assert.ok(field);
+    return field;
+  };
+  const fillDictation = async (text) => {
+    const field = document.getElementById("grl-voice-dictation");
+    assert.ok(field);
+    field.value = text;
+    field.dispatchEvent(new window.Event("input", { bubbles: true }));
+    await pause();
+    return field;
+  };
+  const submitDictation = async () => {
+    assert.ok(action("apply-dictation"));
+    action("apply-dictation").click();
+    await pause(45);
+  };
+  const pendingTimers = (delay) => recognitionTimers.filter((timer) => timer.active && timer.delay === delay);
+  const fireTimer = async (delay) => {
+    const timer = pendingTimers(delay)[0];
+    assert.ok(timer, `An active ${delay}ms recognition timer exists`);
+    timer.active = false;
+    timer.fire();
+    await pause(45);
+  };
   const panelText = () => document.getElementById("grl-voice-panel")?.textContent || "";
-  return { window, document, desktop, action, nativeEdit, clickText, begin, speak, chooseLanguage, restart, sessions, panelText };
+  return { window, document, desktop, action, nativeEdit, clickText, begin, speak, chooseLanguage, restart,
+    openDictation, fillDictation, submitDictation, pendingTimers, fireTimer, sessions, panelText };
 }
 
 test("microphones survive React updates and week switches without duplication", async (t) => {
@@ -568,4 +636,246 @@ test("English recognition failure and microphone accessibility labels use the se
   assert.equal(app.action("retry").textContent, "Try again");
   assert.equal(start.value, "07:00");
   assert.equal(microphone.getAttribute("aria-pressed"), "false");
+});
+
+test("iPhone Home Screen defaults to focused system dictation and applies Polish values only on submit", async (t) => {
+  const app = await mount(t, { isIOS: true, standalone: true });
+  const card = app.document.querySelector(".day-card");
+  const [start, end] = card.querySelectorAll('input[type="time"]');
+  const text = await app.openDictation(start);
+  assert.equal(text.type, "text", "System keyboard dictation uses an ordinary text field");
+  assert.equal(app.document.activeElement, text);
+  assert.equal(app.document.getElementById("grl-voice-panel").dataset.method, "dictation");
+  assert.equal(app.sessions.length, 0, "iOS standalone does not invoke the unreliable Web Speech service by default");
+  await app.fillDictation("szósta trzydzieści rano");
+  assert.equal(start.value, "", "Typing or keyboard dictation cannot change work data before submit");
+  assert.equal(app.desktop("start").value, "");
+  await app.submitDictation();
+  assert.equal(start.value, "06:30");
+  assert.equal(app.desktop("start").value, "06:30");
+  await app.openDictation(end);
+  await app.fillDictation("osiemnasta");
+  await app.submitDictation();
+  const date = card.querySelector('input[type="date"]');
+  await app.openDictation(date);
+  await app.fillDictation("szesnasty listopada 2026");
+  assert.equal(date.value, "");
+  await app.submitDictation();
+  assert.equal(date.value, "2026-11-16");
+  await app.openDictation(start);
+  await app.fillDictation("siódma rano");
+  await app.submitDictation();
+  assert.equal(start.value, "07:00", "A fourth consecutive entry can revisit the same field");
+  app.action("undo").click();
+  await pause(45);
+  assert.equal(start.value, "06:30");
+  assert.equal(app.sessions.length, 0);
+  await app.clickText("Calculate All");
+  assert.equal(app.document.querySelector(".work-table tbody tr .result-cell").textContent, "10.75");
+  assert.equal(app.document.querySelector(".work-table tbody tr .salary-cell").textContent, "£177.38");
+});
+
+test("ordinary iPhone and iPadOS tabs default to dictation while non-iOS standalone keeps Web Speech", async (t) => {
+  for (const options of [{ isIOS: true, standalone: false }, { isIPadOS: true, standalone: false }]) {
+    const app = await mount(t, options);
+    const text = await app.openDictation(app.desktop("start"));
+    assert.equal(app.document.activeElement, text);
+    assert.equal(app.sessions.length, 0);
+    assert.equal(app.document.getElementById("grl-voice-panel").dataset.method, "dictation");
+    app.action("cancel").click();
+  }
+  const otherPlatform = await mount(t, { standalone: true });
+  const recognition = await otherPlatform.begin(otherPlatform.desktop("start"));
+  assert.equal(otherPlatform.sessions.length, 1);
+  assert.equal(otherPlatform.document.getElementById("grl-voice-panel").dataset.method, "speech");
+  assert.equal(recognition.started, true);
+  otherPlatform.action("cancel").click();
+});
+
+test("English system dictation uses the remembered language and UK dates without changing inputs prematurely", async (t) => {
+  const app = await mount(t, { isIOS: true, standalone: true, storage: { grlVoiceLanguageV1: "en-GB" } });
+  const start = app.desktop("start");
+  const text = await app.openDictation(start);
+  assert.match(text.lang, /^en(?:-GB)?$/);
+  await app.fillDictation("six thirty AM");
+  assert.equal(start.value, "");
+  await app.submitDictation();
+  assert.equal(start.value, "06:30");
+  const date = app.desktop("date");
+  await app.openDictation(date);
+  await app.fillDictation("04/05/2026");
+  assert.equal(date.value, "");
+  await app.submitDictation();
+  assert.equal(date.value, "2026-05-04");
+  assert.equal(app.sessions.length, 0);
+});
+
+test("system dictation rejects uncertain text, retains its method on retry, and preserves AM/PM choice and undo", async (t) => {
+  const app = await mount(t, { isIOS: true, standalone: true });
+  const start = app.desktop("start");
+  await app.nativeEdit(start, "07:00");
+  await app.openDictation(start);
+  await app.fillDictation("start szósta rano i koniec osiemnasta");
+  await app.submitDictation();
+  assert.equal(start.value, "07:00", "A combined command cannot be partially accepted");
+  assert.ok(app.action("retry"));
+  app.action("retry").click();
+  await pause();
+  assert.equal(app.document.getElementById("grl-voice-panel").dataset.method, "dictation");
+  assert.equal(app.sessions.length, 0, "Retry must not silently return to Web Speech");
+  assert.ok(app.action("apply-dictation"));
+  await app.fillDictation("szósta");
+  await app.submitDictation();
+  assert.equal(start.value, "07:00");
+  const choices = [...app.document.querySelectorAll('#grl-voice-panel [data-voice-action="apply"]')];
+  assert.deepEqual(choices.map((button) => button.dataset.value).sort(), ["06:00", "18:00"]);
+  choices.find((button) => button.dataset.value === "18:00").click();
+  await pause(45);
+  assert.equal(start.value, "18:00");
+  app.action("undo").click();
+  await pause(45);
+  assert.equal(start.value, "07:00");
+});
+
+test("system dictation cannot overwrite manual edits or a different week through stale submit controls", async (t) => {
+  const app = await mount(t, { isIOS: true, standalone: true });
+  const start = app.desktop("start");
+  await app.openDictation(start);
+  await app.fillDictation("06:30");
+  const staleSubmit = app.action("apply-dictation");
+  await app.nativeEdit(start, "09:15");
+  staleSubmit.click();
+  await pause(45);
+  assert.equal(start.value, "09:15");
+  await app.openDictation(start);
+  await app.fillDictation("06:30");
+  const oldWeekSubmit = app.action("apply-dictation");
+  await app.clickText("Week 2");
+  oldWeekSubmit.click();
+  await pause(45);
+  assert.equal(app.desktop("start", "Monday", 2).value, "");
+  await app.clickText("Week 1 + Week 2");
+  assert.equal(app.desktop("start").value, "09:15");
+});
+
+test("changing dictation language clears old text and invalidates pending interpretations", async (t) => {
+  const app = await mount(t, { isIOS: true, standalone: true });
+  const start = app.desktop("start");
+  await app.openDictation(start);
+  await app.fillDictation("szósta");
+  await app.submitDictation();
+  const oldChoice = app.action("apply");
+  assert.ok(oldChoice);
+  await app.chooseLanguage("en-GB");
+  const text = app.document.getElementById("grl-voice-dictation");
+  assert.equal(text.value, "");
+  assert.match(text.lang, /^en(?:-GB)?$/);
+  assert.equal(app.action("apply"), null);
+  assert.equal(app.document.getElementById("grl-voice-panel").dataset.method, "dictation");
+  oldChoice.click();
+  await pause(45);
+  assert.equal(start.value, "");
+  await app.fillDictation("six thirty AM");
+  await app.submitDictation();
+  assert.equal(start.value, "06:30");
+  assert.equal(app.sessions.length, 0);
+});
+
+test("missing or failed Web Speech offers system dictation while explicit speech remains available", async (t) => {
+  const unsupported = await mount(t, { speech: false });
+  const unsupportedStart = unsupported.desktop("start");
+  unsupportedStart.parentElement.querySelector(".grl-voice-button").click();
+  await pause();
+  assert.ok(unsupported.action("dictate"));
+  unsupported.action("dictate").click();
+  await pause();
+  assert.equal(unsupported.document.activeElement, unsupported.document.getElementById("grl-voice-dictation"));
+  await unsupported.fillDictation("06:30");
+  await unsupported.submitDictation();
+  assert.equal(unsupportedStart.value, "06:30");
+
+  const app = await mount(t);
+  const start = app.desktop("start");
+  const failed = await app.begin(start);
+  failed.error("service-not-allowed");
+  await pause();
+  assert.ok(app.action("dictate"));
+  app.action("dictate").click();
+  await pause();
+  assert.equal(app.document.getElementById("grl-voice-panel").dataset.method, "dictation");
+  assert.equal(app.sessions.length, 1);
+  assert.ok(app.action("speech"));
+  app.action("speech").click();
+  await waitFor(() => app.sessions.length === 2, "explicit Web Speech action");
+  await pause();
+  assert.equal(app.sessions[1].lang, "pl-PL");
+  app.sessions[1].final("szósta trzydzieści rano");
+  await pause(45);
+  assert.equal(start.value, "06:30");
+});
+
+test("dictation Enter respects IME composition and Escape restores the microphone without applying text", async (t) => {
+  const app = await mount(t, { isIOS: true, standalone: true });
+  const start = app.desktop("start");
+  let text = await app.openDictation(start);
+  await app.fillDictation("szósta trzydzieści rano");
+  text.dispatchEvent(new app.window.CompositionEvent("compositionstart", { bubbles: true }));
+  text.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  await pause();
+  assert.equal(start.value, "");
+  text.dispatchEvent(new app.window.CompositionEvent("compositionend", { bubbles: true }));
+  text.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true }));
+  text.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Enter", keyCode: 229, bubbles: true, cancelable: true }));
+  await pause();
+  assert.equal(start.value, "");
+  text.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  await pause(45);
+  assert.equal(start.value, "06:30");
+  assert.equal(app.document.activeElement, app.action("undo"), "Enter keeps focus on the result action after the dictation input is hidden");
+  text = await app.openDictation(start);
+  await app.fillDictation("18:00");
+  text.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await pause();
+  assert.equal(start.value, "06:30");
+  assert.equal(app.document.getElementById("grl-voice-panel").hidden, true);
+  assert.equal(app.document.activeElement, start.parentElement.querySelector(".grl-voice-button"));
+});
+
+test("Web Speech allows sixty seconds to start then twenty seconds to listen and ignores a late start", async (t) => {
+  const app = await mount(t, { autoRecognitionStart: false, controlledRecognitionTimers: true });
+  const start = app.desktop("start");
+  const recognition = await app.begin(start);
+  assert.equal(app.pendingTimers(60000).length, 1);
+  assert.equal(app.pendingTimers(20000).length, 0, "The listening budget must not run during a permission prompt");
+  recognition.onstart({});
+  await pause();
+  assert.equal(app.pendingTimers(60000).length, 0);
+  assert.equal(app.pendingTimers(20000).length, 1);
+  recognition.final("szósta trzydzieści rano");
+  await pause(45);
+  assert.equal(start.value, "06:30");
+  assert.equal(app.pendingTimers(20000).length, 0);
+
+  const end = app.desktop("end");
+  const stalled = await app.begin(end);
+  const lateStart = stalled.onstart;
+  const lateResult = stalled.onresult;
+  const lateEnd = stalled.onend;
+  await app.fireTimer(60000);
+  assert.ok(app.action("dictate"));
+  lateStart?.call(stalled, {});
+  lateResult?.call(stalled, speechEvent("osiemnasta"));
+  lateEnd?.call(stalled, {});
+  await pause(45);
+  assert.equal(end.value, "");
+  assert.equal(app.pendingTimers(20000).length, 0, "A stale start callback cannot revive a timed-out session");
+  assert.equal(end.parentElement.querySelector(".grl-voice-button").getAttribute("aria-pressed"), "false");
+
+  const silent = await app.restart("pl-PL");
+  silent.onstart({});
+  await pause();
+  await app.fireTimer(20000);
+  assert.equal(end.value, "");
+  assert.ok(app.action("dictate"));
+  assert.equal(silent.aborted, true);
 });
