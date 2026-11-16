@@ -52,15 +52,30 @@ Jeśli klawiatura nie pokazuje mikrofonu, sprawdź **Ustawienia → Ogólne → 
 
 Tekst dyktowania może pojawiać się częściami. Dlatego dopiero **Wpisz tekst / Use text** uruchamia parser i zmienia docelowe pole, a nie każde dopisane słowo. W tym samym polu można poprawić tekst, wpisać go ręcznie albo wkleić. Dostępny jest również przycisk pozwalający spróbować rozpoznawania przeglądarki.
 
-### Zatwierdzanie tekstu — poprawka v4
+### Mikrofon przeglądarki na iPhonie / iPadzie — poprawka v5
 
-Panel ma oznaczenie **GŁOS · v4 / VOICE · v4**. Pozwala ono sprawdzić, czy telefon uruchomił aktualne pliki.
+Aktualny panel ma oznaczenie **GŁOS · v5 / VOICE · v5**. Ta wersja zmienia opcjonalny tryb **Spróbuj mikrofonu przeglądarki**, który u części użytkowników iOS działa tylko przy pierwszej próbie. Domyślny wybór dyktowania klawiaturą pozostaje dostępny.
+
+1. Naciśnij mikrofon przy wybranym polu i wybierz **Spróbuj mikrofonu przeglądarki**.
+2. Telefon odtworzy krótki komunikat w wybranym języku. Poczekaj na napis **Słucham / Listening**.
+3. Powiedz jedną godzinę lub datę i zrób krótką pauzę. Przeglądarka sama zakończy rozpoznawanie, a kalkulator wpisze lub poprosi o potwierdzenie wyniku.
+4. W tym trybie na iPhonie przycisk **Anuluj słuchanie / Cancel listening** przerywa próbę bez zapisywania wyniku. Do zwykłego zatwierdzenia wypowiedzi wystarcza pauza.
+
+Obejście opiera się na dwóch raportach w [zgłoszeniu WebKit 321436, komentarze 8–9](https://bugs.webkit.org/show_bug.cgi?id=321436#c8): słyszalny komunikat `speechSynthesis` przed każdą próbą, uruchomienie `SpeechRecognition` po zakończeniu komunikatu oraz naturalne zakończenie rozpoznawania. To obejście zgłoszone przez użytkowników, a nie potwierdzona naprawa WebKit ani gwarancja działania na każdym urządzeniu i w każdym języku.
+
+Kod nie przerywa już poprawnej sesji iOS po 800 ms od końcowego wyniku i nie wywołuje ponownie `abort()` po naturalnym `end`. Anulowanie, ukrycie strony i limity czasu nadal zatrzymują aktywny mikrofon. Nowa próba nie nakłada się na poprzednią sesję iOS, która nie potwierdziła jeszcze zakończenia; panel pozwala ponowić próbę lub użyć klawiatury. Spóźnione zakończenie anulowanego komunikatu nie może uruchomić nowego nasłuchiwania. Jeśli przygotowanie dźwięku zawiedzie, panel udostępnia dyktowanie klawiaturą; nie włącza mikrofonu automatycznie inną metodą.
+
+Próba na telefonie po aktualizacji: zapisz potrzebne dane przyciskiem **Save**, całkowicie zamknij kalkulator w przełączniku aplikacji i otwórz go ponownie z dostępem do internetu. Sprawdź oznaczenie **v5** i wykonaj co najmniej trzy wpisy jeden po drugim, np. Start → „szósta trzydzieści rano”, End → „osiemnasta”, Start kolejnego dnia → „siódma piętnaście rano”. W zwykłym Safari zamknij i uruchom ponownie Safari. Samo odświeżenie nie usuwało blokady silnika w zgłoszonych przypadkach. Nie trzeba usuwać danych witryny ani zapisanych formularzy.
+
+Po ręcznym przerwaniu lub błędzie obejście może przestać pomagać. Jeśli kolejne próby nadal nie zwracają tekstu, użyj **Dyktuj klawiaturą / wpisz tekst**. Do dalszej diagnozy zachowaj widoczny komunikat i kod błędu oraz numer wersji iOS; nie są potrzebne nagrania ani treść faktury.
+
+### Zatwierdzanie tekstu — poprawka v4 zachowana w v5
 
 Naciśnięcie **Wpisz tekst** podczas kończenia dyktowania nie jest już ignorowane. Panel prosi pole o zakończenie edycji i czeka na końcowy tekst przed jego odczytaniem. Enter używany do wybierania lub zatwierdzania części tekstu na klawiaturze nadal nie zapisuje niegotowej godziny.
 
 Jeżeli telefon nie potwierdzi zakończenia tekstu, panel zachowa wypowiedź i pokaże wskazówkę: zakończ dyktowanie przyciskiem klawiatury i ponownie naciśnij **Wpisz tekst**. Nie wpisze częściowego wyniku. Zmiana wybranego pola, języka lub formularza oraz zamknięcie panelu anulują oczekujące zatwierdzenie.
 
-Ta poprawka dotyczy obsługi tekstu w kalkulatorze. Nie naprawia systemowej usługi `SpeechRecognition` dostępnej przez opcjonalny przycisk **Spróbuj mikrofonu przeglądarki**. Jeśli ten tryb nadal działa tylko raz, skorzystaj z domyślnego dyktowania klawiaturą iPhone’a. Gdy nie działa także dyktowanie klawiatury, do diagnozy potrzebne są komunikat panelu i informacja, czy wypowiedziane słowa pojawiają się w jego polu tekstowym.
+Poprawka v4 dotyczy obsługi tekstu z klawiatury. Jest niezależna od obejścia przeglądarkowego mikrofonu dodanego w v5. Gdy nie działa dyktowanie klawiatury, do diagnozy potrzebne są komunikat panelu i informacja, czy wypowiedziane słowa pojawiają się w jego polu tekstowym.
 
 Na urządzeniach innych niż iPhone/iPad dotychczasowy tryb głosowy pozostaje domyślny. Jeżeli usługa rozpoznawania jest niedostępna lub zgłasza błąd, panel udostępnia tę samą alternatywę z klawiaturą.
 
@@ -70,7 +85,7 @@ Na urządzeniach innych niż iPhone/iPad dotychczasowy tryb głosowy pozostaje d
 - Bezpośrednie rozpoznawanie wymaga `SpeechRecognition` albo `webkitSpeechRecognition`. Alternatywne dyktowanie klawiaturą nie używa tego API. Dostępność obu metod zależy od urządzenia i ustawień.
 - W Safari sprawdź zgodę na mikrofon oraz ustawienia Siri lub dyktowania. Porównanie zwykłej karty Safari z aplikacją otwieraną z ikony pomaga ustalić przyczynę problemu, ale samo otwarcie Safari nie gwarantuje rozpoznania.
 - Rozpoznawanie może wymagać internetu. Przeglądarka albo system telefonu może wysłać dźwięk do swojego dostawcy rozpoznawania. Kalkulator nie zapisuje nagrań ani transkrypcji w pamięci trwałej i nie dodaje własnej usługi przesyłania dźwięku. Nie gwarantuje dyktowania offline w każdym języku.
-- Bezpośredni mikrofon uruchamia się tylko po naciśnięciu przycisku. Oczekiwanie na start lub zgodę ma osobny limit 60 sekund; limit 20 sekund słuchania rozpoczyna się dopiero po uruchomieniu rozpoznawania. Zamknięcie panelu, zmiana tygodnia, ręczna zmiana formularza lub ukrycie strony unieważniają oczekujący wynik. Systemowe dyktowanie klawiatury uruchamia i kończy użytkownik przez kontrolki iOS.
+- Bezpośredni mikrofon uruchamia się tylko w odpowiedzi na naciśnięcie przycisku. Na iOS poprzedza go krótki komunikat głosowy, którego zakończenie ma osobny limit 10 sekund. Oczekiwanie na start rozpoznawania lub zgodę ma limit 60 sekund; limit 20 sekund słuchania rozpoczyna się dopiero po uruchomieniu rozpoznawania. Zamknięcie panelu, zmiana tygodnia, ręczna zmiana formularza lub ukrycie strony unieważniają oczekujący wynik. Systemowe dyktowanie klawiatury uruchamia i kończy użytkownik przez kontrolki iOS.
 - Ręczne wpisywanie pozostaje dostępne. Nie ma gwarancji bezbłędnego rozpoznania w hałasie; sprawdź wynik przed obliczeniem i wystawieniem faktury.
 
 ## Pliki i weryfikacja dla programisty
@@ -78,7 +93,7 @@ Na urządzeniach innych niż iPhone/iPad dotychczasowy tryb głosowy pozostaje d
 - `voice-parser.js`: niezależny, konserwatywny parser całej wypowiedzi; brak usług sieciowych.
 - `voice-input.js`: przyciski, zarządzanie sesją, rozpoznawanie przeglądarki i alternatywne dyktowanie klawiaturą, interpretacja końcowego tekstu, cofanie i integracja z istniejącymi zdarzeniami pól React. Nie przenosi istniejących elementów pól. Panel zachowuje krótki kod błędu, odróżniając także brak startu od braku wyniku, bez zapisu nagrań.
 - `voice-input.css`: dopasowany interfejs; na telefonie cel dotykowy mikrofonu ma 44 × 44 px.
-- `sw.js`: cache v9 obejmuje pliki PL/EN w wersji `?v=4`, aby urządzenia pobrały poprawkę. Usuwane są wyłącznie stare cache tego kalkulatora, a nie innych aplikacji w tej samej domenie.
+- `sw.js`: cache v10 obejmuje pliki PL/EN w wersji `?v=5`, aby urządzenia pobrały poprawkę. Usuwane są wyłącznie stare cache tego kalkulatora, a nie innych aplikacji w tej samej domenie.
 
 Testy parsera (bez zależności):
 

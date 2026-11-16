@@ -35,10 +35,17 @@ async function mount(t, {
   isIPadOS = false,
   standalone = false,
   autoRecognitionStart = true,
+  autoAbortEnd = true,
+  recognitionStartThrows = 0,
   controlledRecognitionTimers = false,
   controlledDictationTimers = false,
+  synthesis = true,
+  synthesisThrows = false,
+  synthesisBusy = false,
+  controlledPromptTimers = false,
 } = {}) {
   const sessions = [];
+  const prompts = [];
   const errors = [];
   const recognitionTimers = [];
   const virtualConsole = new VirtualConsole();
@@ -52,6 +59,11 @@ async function mount(t, {
       this.aborted = false;
     }
     start() {
+      this.startCalls = (this.startCalls || 0) + 1;
+      if (recognitionStartThrows > 0) {
+        recognitionStartThrows -= 1;
+        throw new Error("Recognition did not start");
+      }
       this.started = true;
       if (autoRecognitionStart) queueMicrotask(() => this.onstart?.({}));
     }
@@ -60,10 +72,16 @@ async function mount(t, {
     }
     abort() {
       this.aborted = true;
-      queueMicrotask(() => this.onend?.({}));
+      if (autoAbortEnd) queueMicrotask(() => this.onend?.({}));
     }
     interim(transcript) {
       this.onresult?.(speechEvent(transcript, false));
+    }
+    result(transcript) {
+      this.onresult?.(speechEvent(transcript, true));
+    }
+    end() {
+      this.onend?.({});
     }
     final(transcript) {
       this.onresult?.(speechEvent(transcript, true));
@@ -74,6 +92,31 @@ async function mount(t, {
       this.onend?.({});
     }
   }
+
+  class FakeSpeechSynthesisUtterance {
+    constructor(text) {
+      this.text = text;
+      this.lang = "";
+      this.volume = 1;
+      this.rate = 1;
+      this.pitch = 1;
+    }
+  }
+  const synthesizer = {
+    speaking: false,
+    pending: synthesisBusy,
+    cancelCalls: 0,
+    speak(utterance) {
+      if (synthesisThrows) throw new Error("The speech output service is unavailable");
+      prompts.push(utterance);
+      this.speaking = true;
+    },
+    cancel() {
+      this.cancelCalls += 1;
+      this.speaking = false;
+    },
+    getVoices: () => [],
+  };
 
   const dom = new JSDOM(APP_HTML, {
     url: "https://gipsdrill.github.io/GRL-Driver-Invoice-Calculator/",
@@ -108,12 +151,13 @@ async function mount(t, {
         Object.defineProperty(window.navigator, "platform", { value: "iPhone" });
         Object.defineProperty(window.navigator, "maxTouchPoints", { value: 5 });
       }
-      if (controlledRecognitionTimers || controlledDictationTimers) {
+      if (controlledRecognitionTimers || controlledDictationTimers || controlledPromptTimers) {
         const realSetTimeout = window.setTimeout.bind(window);
         const realClearTimeout = window.clearTimeout.bind(window);
         const interceptedDelays = new Set([
           ...(controlledRecognitionTimers ? [60000, 20000] : []),
           ...(controlledDictationTimers ? [120, 2500] : []),
+          ...(controlledPromptTimers ? [10000, 800] : []),
         ]);
         window.setTimeout = (callback, delay = 0, ...args) => {
           if (!interceptedDelays.has(delay)) return realSetTimeout(callback, delay, ...args);
@@ -138,6 +182,10 @@ async function mount(t, {
         return [{ x: 0, y: 0, top: 0, left: 0, right: 180, bottom: 44, width: 180, height: 44 }];
       };
       if (speech) window.SpeechRecognition = FakeSpeechRecognition;
+      if (synthesis) {
+        window.SpeechSynthesisUtterance = FakeSpeechSynthesisUtterance;
+        window.speechSynthesis = synthesizer;
+      }
     },
   });
   const { window } = dom;
@@ -241,7 +289,7 @@ async function mount(t, {
   };
   const panelText = () => document.getElementById("grl-voice-panel")?.textContent || "";
   return { window, document, desktop, action, nativeEdit, clickText, begin, speak, chooseLanguage, restart,
-    openDictation, fillDictation, submitDictation, pendingTimers, fireTimer, sessions, panelText };
+    openDictation, fillDictation, submitDictation, pendingTimers, fireTimer, sessions, prompts, synthesizer, panelText };
 }
 
 test("microphones survive React updates and week switches without duplication", async (t) => {
@@ -1019,4 +1067,240 @@ test("composition regression: pending completion cannot survive cancellation, a 
     assert.equal(app.pendingTimers(120).length, 0);
     assert.equal(app.pendingTimers(2500).length, 0);
   }
+});
+
+async function openIOSPrompt(app, input) {
+  await app.openDictation(input);
+  const count = app.prompts.length;
+  assert.ok(app.action("speech"));
+  app.action("speech").click();
+  await pause();
+  assert.equal(app.prompts.length, count + 1, "Every iOS browser speech attempt has its own spoken prompt");
+  const prompt = app.prompts.at(-1);
+  assert.equal(app.document.getElementById("grl-voice-panel").dataset.state, "prompting");
+  assert.match(prompt.text, /\S/, "The prompt contains spoken words");
+  assert.ok(prompt.volume > 0, "The prompt must be audible, not a silent synthesis workaround");
+  return prompt;
+}
+
+async function finishIOSPrompt(app, prompt) {
+  const previous = app.sessions.filter((recognition) => recognition.started).length;
+  assert.equal(typeof prompt.onend, "function");
+  app.synthesizer.speaking = false;
+  prompt.onend({});
+  await waitFor(() => app.sessions.filter((recognition) => recognition.started).length > previous,
+    "recognition begins after the spoken prompt finishes");
+  await pause();
+  return app.sessions.at(-1);
+}
+
+test("iOS browser speech: three consecutive Polish entries each wait for an audible prompt and a natural end", async (t) => {
+  const app = await mount(t, { isIOS: true, standalone: true, controlledPromptTimers: true });
+  const entries = [
+    [app.desktop("start"), "szósta trzydzieści rano", "06:30"],
+    [app.desktop("end"), "osiemnasta", "18:00"],
+    [app.desktop("date"), "szesnasty listopada 2026", "2026-11-16"],
+  ];
+  for (const [index, [input, transcript, value]] of entries.entries()) {
+    const prompt = await openIOSPrompt(app, input);
+    assert.equal(prompt.lang, "pl-PL");
+    assert.equal(app.sessions.filter((recognition) => recognition.started).length, index,
+      "The microphone cannot start before this prompt ends");
+    const latePromptEnd = prompt.onend;
+    const recognition = await finishIOSPrompt(app, prompt);
+    assert.equal(recognition.lang, "pl-PL");
+    assert.equal(recognition.continuous, false);
+    latePromptEnd({});
+    assert.equal(recognition.startCalls, 1, "A duplicate prompt completion cannot start recognition twice");
+    recognition.result(transcript);
+    assert.equal(app.pendingTimers(800).length, 0, "iOS must not abort and interpret a final result on the old 800 ms fallback");
+    await pause(index === 0 ? 850 : 25);
+    assert.equal(input.value, "", "A final transcript alone does not finish the native listening session");
+    assert.equal(app.document.getElementById("grl-voice-panel").dataset.state, "listening");
+    recognition.end();
+    await waitFor(() => input.value === value && app.action("undo"), "natural end commits the complete utterance");
+    assert.equal(recognition.aborted, false, "Natural completion must not issue abort");
+    assert.notEqual(recognition.stopped, true, "Natural completion must not issue stop");
+  }
+  assert.equal(app.prompts.length, 3);
+  await app.clickText("Calculate All");
+  assert.equal(app.document.querySelector(".work-table tbody tr .result-cell").textContent, "10.75");
+  assert.equal(app.document.querySelector(".work-table tbody tr .salary-cell").textContent, "£177.38");
+});
+
+test("iOS browser speech: English uses an English prompt and recognition locale before filling the real form", async (t) => {
+  const app = await mount(t, { isIPadOS: true, storage: { grlVoiceLanguageV1: "en-GB" } });
+  const start = app.desktop("start");
+  const prompt = await openIOSPrompt(app, start);
+  assert.equal(prompt.lang, "en-GB");
+  assert.match(prompt.text, /preparing.*microphone/i);
+  assert.equal(app.sessions.some((recognition) => recognition.started), false);
+  const recognition = await finishIOSPrompt(app, prompt);
+  assert.equal(recognition.lang, "en-GB");
+  recognition.final("six thirty AM");
+  await waitFor(() => start.value === "06:30" && app.action("undo"), "English speech result");
+  assert.equal(recognition.aborted, false);
+  assert.equal(app.document.querySelector('.day-card .mobile-fields input[type="time"]').value, "06:30");
+});
+
+test("iOS browser speech: cancellation aborts without applying and a fresh attempt waits for native cleanup", async (t) => {
+  const app = await mount(t, { isIOS: true, autoAbortEnd: false });
+  const end = app.desktop("end");
+  await app.nativeEdit(end, "17:00");
+  const recognition = await finishIOSPrompt(app, await openIOSPrompt(app, end));
+  recognition.result("osiemnasta");
+  const lateEnd = recognition.onend;
+  const lateResult = recognition.onresult;
+  assert.ok(app.action("cancel-listening"));
+  app.action("cancel-listening").click();
+  await pause();
+  assert.equal(recognition.aborted, true);
+  assert.notEqual(recognition.stopped, true);
+  assert.equal(app.document.getElementById("grl-voice-panel").hidden, true);
+  await app.openDictation(end);
+  app.action("speech").click();
+  await pause();
+  assert.equal(app.prompts.length, 1, "An unfinished native abort blocks another spoken prompt");
+  assert.equal(app.sessions.filter((item) => item.started).length, 1, "The old native recognizer is still closing");
+  assert.equal(app.document.getElementById("grl-voice-panel").dataset.errorCode, "recognition-closing");
+  lateResult?.(speechEvent("osiemnasta dwadzieścia siedem"));
+  lateEnd?.({});
+  await pause(45);
+  assert.equal(end.value, "17:00");
+  recognition.end(); // The live cleanup handler receives the actual native end.
+  await pause();
+  assert.ok(app.action("retry"));
+  app.action("retry").click();
+  await pause();
+  assert.equal(app.prompts.length, 2, "Only a fresh explicit retry follows native cleanup");
+  const next = await finishIOSPrompt(app, app.prompts[1]);
+  next.final("osiemnasta");
+  await waitFor(() => end.value === "18:00", "recording after cleanup succeeds");
+  assert.equal(next.aborted, false);
+});
+
+test("iOS browser speech: cancelled or stale prompt callbacks cannot open the microphone", async (t) => {
+  for (const change of ["cancel", "pagehide", "locale", "target", "manual"]) {
+    const app = await mount(t, { isIOS: true });
+    const start = app.desktop("start");
+    const prompt = await openIOSPrompt(app, start);
+    const lateEnd = prompt.onend;
+    const lateError = prompt.onerror;
+    if (change === "cancel") app.action("cancel").click();
+    if (change === "pagehide") app.window.dispatchEvent(new app.window.Event("pagehide"));
+    if (change === "locale") await app.chooseLanguage("en-GB");
+    if (change === "target") await app.openDictation(app.desktop("end"));
+    if (change === "manual") await app.nativeEdit(start, "09:15");
+    const panel = app.document.getElementById("grl-voice-panel");
+    const state = { hidden: panel.hidden, method: panel.dataset.method, language: panel.lang };
+    lateEnd?.({});
+    lateError?.({ error: "synthesis-failed" });
+    await pause(45);
+    assert.equal(app.sessions.some((recognition) => recognition.started), false, `${change}: no late microphone start`);
+    assert.ok(app.synthesizer.cancelCalls > 0, `${change}: outstanding prompt was cancelled`);
+    assert.equal(start.value, change === "manual" ? "09:15" : "");
+    assert.equal(app.desktop("end").value, "");
+    assert.deepEqual({ hidden: panel.hidden, method: panel.dataset.method, language: panel.lang }, state,
+      `${change}: late callbacks do not replace the current panel`);
+  }
+});
+
+test("iOS browser speech: prompt or start failures preserve data and keep recovery available", async (t) => {
+  for (const failure of ["unavailable", "throw", "error", "busy", "start"]) {
+    const app = await mount(t, {
+      isIOS: true,
+      synthesis: failure !== "unavailable",
+      synthesisThrows: failure === "throw",
+      synthesisBusy: failure === "busy",
+      recognitionStartThrows: failure === "start" ? 1 : 0,
+    });
+    const start = app.desktop("start");
+    await app.nativeEdit(start, "07:00");
+    await app.openDictation(start);
+    app.action("speech").click();
+    await pause();
+    if (failure === "error") {
+      assert.equal(app.prompts.length, 1);
+      app.synthesizer.speaking = false;
+      app.prompts[0].onerror({ error: "synthesis-failed" });
+      await pause();
+    }
+    if (failure === "start") {
+      assert.equal(app.prompts.length, 1);
+      app.synthesizer.speaking = false;
+      app.prompts[0].onend({});
+      await pause();
+    }
+    assert.equal(app.sessions.some((recognition) => recognition.started), false, `${failure}: no recording after a failed prompt`);
+    assert.equal(start.value, "07:00");
+    assert.ok(app.action("dictate"), `${failure}: keyboard dictation remains available`);
+    assert.equal(app.document.getElementById("grl-voice-panel").dataset.state, "error");
+    if (failure === "busy") {
+      assert.equal(app.prompts.length, 0, "An unrelated synthesis queue is not interrupted by another prompt");
+      assert.equal(app.synthesizer.cancelCalls, 0, "The app must not cancel speech that it does not own");
+      assert.equal(app.document.getElementById("grl-voice-panel").dataset.errorCode, "prompt-busy");
+    }
+    if (failure === "start") {
+      app.action("retry").click();
+      await pause();
+      assert.equal(app.prompts.length, 2, "A synchronous start throw must not leave a recognizer awaiting an end that will never arrive");
+      const recovered = await finishIOSPrompt(app, app.prompts[1]);
+      recovered.final("szósta trzydzieści rano");
+      await waitFor(() => start.value === "06:30", "explicit retry after a synchronous start failure");
+      continue;
+    }
+    app.action("dictate").click();
+    await pause();
+    await app.fillDictation("szósta trzydzieści rano");
+    await app.submitDictation();
+    assert.equal(start.value, "06:30");
+    if (failure === "busy") assert.equal(app.synthesizer.cancelCalls, 0);
+  }
+});
+
+test("iOS browser speech: prompt and listening timeouts cannot start late or apply without a natural end", async (t) => {
+  const app = await mount(t, { isIOS: true, controlledPromptTimers: true, controlledRecognitionTimers: true });
+  const start = app.desktop("start");
+  const prompt = await openIOSPrompt(app, start);
+  const lateEnd = prompt.onend;
+  assert.equal(app.pendingTimers(10000).length, 1);
+  assert.equal(app.pendingTimers(60000).length, 0, "Recognition startup time begins after the prompt");
+  await app.fireTimer(10000);
+  assert.equal(app.document.getElementById("grl-voice-panel").dataset.state, "error");
+  assert.ok(app.action("dictate"));
+  lateEnd?.({});
+  await pause();
+  assert.equal(app.sessions.some((recognition) => recognition.started), false);
+  assert.equal(start.value, "");
+  app.action("retry").click();
+  await pause();
+  assert.equal(app.prompts.length, 2);
+  const recognition = await finishIOSPrompt(app, app.prompts[1]);
+  recognition.final("szósta trzydzieści rano");
+  await waitFor(() => start.value === "06:30", "retry completes after a fresh spoken prompt");
+  assert.equal(app.pendingTimers(10000).length, 0);
+
+  const end = app.desktop("end");
+  const unfinished = await finishIOSPrompt(app, await openIOSPrompt(app, end));
+  unfinished.result("osiemnasta");
+  assert.equal(app.pendingTimers(20000).length, 1);
+  await app.fireTimer(20000);
+  assert.equal(end.value, "", "A final transcript must not be committed when native recognition never ends");
+  assert.equal(unfinished.aborted, true);
+  assert.equal(app.document.getElementById("grl-voice-panel").dataset.state, "error");
+  assert.ok(app.action("dictate"));
+});
+
+test("non-iOS browser speech keeps direct startup and its final-result fallback without speech synthesis", async (t) => {
+  const app = await mount(t, { controlledPromptTimers: true });
+  const start = app.desktop("start");
+  const recognition = await app.begin(start);
+  assert.equal(app.prompts.length, 0);
+  assert.equal(recognition.startCalls, 1);
+  recognition.result("szósta trzydzieści rano");
+  assert.equal(start.value, "");
+  assert.equal(app.pendingTimers(800).length, 1);
+  await app.fireTimer(800);
+  assert.equal(start.value, "06:30");
+  assert.equal(recognition.aborted, true, "The existing fallback still closes the unfinished non-iOS session");
 });

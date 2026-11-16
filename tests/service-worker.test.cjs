@@ -13,7 +13,7 @@ function worker() {
     skipWaiting: async () => {}, clients: { claim: async () => {} },
   };
   const caches = {
-    keys: async () => ["grl-driver-invoice-v5", "grl-driver-invoice-v6", "grl-driver-invoice-v7", "grl-driver-invoice-v8", "grl-driver-invoice-v9", "rotamaster-v3", "goodform-assets"],
+    keys: async () => ["grl-driver-invoice-v5", "grl-driver-invoice-v6", "grl-driver-invoice-v7", "grl-driver-invoice-v8", "grl-driver-invoice-v9", "grl-driver-invoice-v10", "rotamaster-v3", "goodform-assets"],
     delete: async (key) => { deleted.push(key); return true; },
     open: async () => ({ addAll: async (urls) => { cached.push(...urls); } }),
   };
@@ -29,14 +29,14 @@ function worker() {
 test("cache activation preserves other applications on the same GitHub Pages origin", async () => {
   const w = worker();
   await w.run("activate");
-  assert.deepEqual(w.deleted, ["grl-driver-invoice-v5", "grl-driver-invoice-v6", "grl-driver-invoice-v7", "grl-driver-invoice-v8"]);
+  assert.deepEqual(w.deleted, ["grl-driver-invoice-v5", "grl-driver-invoice-v6", "grl-driver-invoice-v7", "grl-driver-invoice-v8", "grl-driver-invoice-v9"]);
 });
 
 test("new voice assets and the actual stylesheet version are available in the app shell", async () => {
   const w = worker();
   await w.run("install");
   const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
-  for (const file of ["voice-parser.js?v=4", "voice-input.js?v=4", "voice-input.css?v=4", "nextgen.css?v=5"]) {
+  for (const file of ["voice-parser.js?v=5", "voice-input.js?v=5", "voice-input.css?v=5", "nextgen.css?v=5"]) {
     assert.ok(html.includes(`./${file}`));
     assert.ok(w.cached.includes(w.scope + file));
     assert.ok(fs.existsSync(path.join(__dirname, "..", file.split("?")[0])));

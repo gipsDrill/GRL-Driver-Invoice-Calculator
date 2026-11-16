@@ -1,4 +1,4 @@
-const CACHE_NAME = "grl-driver-invoice-v9";
+const CACHE_NAME = "grl-driver-invoice-v10";
 const SCOPE_URL = self.registration.scope;
 const scopedUrl = (path = "") => new URL(path, SCOPE_URL).toString();
 const APP_SHELL = [
@@ -10,9 +10,9 @@ const APP_SHELL = [
   "sticky-week-switch.js?v=4",
   "nextgen.css?v=5",
   "nextgen-ui.js?v=4",
-  "voice-input.css?v=4",
-  "voice-parser.js?v=4",
-  "voice-input.js?v=4",
+  "voice-input.css?v=5",
+  "voice-parser.js?v=5",
+  "voice-input.js?v=5",
   "og-image.jpeg",
   "icons/grl-app-192.png",
   "icons/grl-app-512.png",

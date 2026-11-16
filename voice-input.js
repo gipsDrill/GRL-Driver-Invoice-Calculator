@@ -20,7 +20,7 @@
   } catch (_) { /* Voice entry also works when browser storage is unavailable. */ }
   const COPY = {
     "pl-PL": {
-      heading: "GŁOS · v4", panel: "Wprowadzanie głosem po polsku", close: "Zamknij wprowadzanie głosem",
+      heading: "GŁOS · v5", panel: "Wprowadzanie głosem po polsku", close: "Zamknij wprowadzanie głosem",
       language: "Język rozpoznawania mowy", microphone: "Wpisz głosem", tip: "Wpisz głosem po polsku",
       guideTitle: "Jak mówić?",
       guide: "Naciśnij mikrofon przy wybranym polu i ustaw PL lub EN. Powiedz jedną godzinę albo datę, np. „szósta trzydzieści rano”, „osiemnasta”, „wczoraj” lub „szesnasty listopada dwa tysiące dwadzieścia sześć”. Przy godzinach 1–12 dodaj „rano” lub „wieczorem”. Sprawdź wpisany wynik; w razie pomyłki użyj „Cofnij”.",
@@ -50,6 +50,14 @@
       listenDate: "Słucham. Powiedz np. „wczoraj” lub pełną datę z rokiem.",
       noMatch: "Nie rozpoznałem daty ani godziny. Powtórz krótkie polecenie.",
       stop: "Zakończ słuchanie", processing: "Przetwarzam wypowiedź…",
+      cancelListening: "Anuluj słuchanie", iosPrompt: "Przygotowuję mikrofon.",
+      iosPreparing: "Przygotowuję mikrofon. Zacznij mówić po pojawieniu się napisu „Słucham”.",
+      iosHelp: "Po komunikacie poczekaj na „Słucham”, powiedz godzinę lub datę i zrób pauzę. Słuchanie zakończy się samo.",
+      iosPause: "Po wypowiedzi zrób pauzę.",
+      promptError: "Nie udało się odtworzyć komunikatu przed słuchaniem. Spróbuj ponownie lub użyj dyktowania klawiatury.",
+      promptBusy: "Usługa odczytu głosowego jest zajęta. Poczekaj na jej zakończenie lub użyj dyktowania klawiatury.",
+      recognitionClosing: "Poprzednie słuchanie jeszcze się nie zakończyło. Spróbuj ponownie za chwilę lub użyj dyktowania klawiatury.",
+      endTimeout: "Przeglądarka nie zakończyła słuchania. Użyj dyktowania klawiatury lub spróbuj ponownie. Wynik nie został wpisany.",
       timeout: "Mikrofon nie zwrócił wyniku. Użyj dyktowania klawiatury lub wpisz tekst. Możesz też sprawdzić uprawnienia i internet.",
       startError: "Nie można uruchomić mikrofonu. Sprawdź uprawnienia przeglądarki i spróbuj ponownie.",
       unknownError: "Rozpoznawanie mowy nie zadziałało. Spróbuj ponownie lub wpisz dane ręcznie.",
@@ -73,7 +81,7 @@
       },
     },
     "en-GB": {
-      heading: "VOICE · v4", panel: "Voice entry in English", close: "Close voice entry",
+      heading: "VOICE · v5", panel: "Voice entry in English", close: "Close voice entry",
       language: "Speech recognition language", microphone: "Enter by voice", tip: "Enter by voice in English",
       guideTitle: "What can I say?",
       guide: "Tap the microphone beside a field and choose PL or EN. Say one time or date, for example “six thirty AM”, “six PM”, “half past six in the morning”, “yesterday” or “16 November 2026”. Include AM or PM for hours 1–12. Numeric dates use UK day/month/year. Check the result and use Undo if needed.",
@@ -103,6 +111,14 @@
       listenDate: "Listening. Say “yesterday” or a full date with a year. Numeric dates use UK day/month order.",
       noMatch: "No date or time was recognised. Repeat a short command.",
       stop: "Stop listening", processing: "Processing your speech…",
+      cancelListening: "Cancel listening", iosPrompt: "Preparing the microphone.",
+      iosPreparing: "Preparing the microphone. Speak when “Listening” appears.",
+      iosHelp: "After the prompt, wait for “Listening”, say one time or date, then pause. Listening will finish automatically.",
+      iosPause: "Pause after speaking.",
+      promptError: "The prompt before listening could not play. Try again or use keyboard dictation.",
+      promptBusy: "Speech playback is busy. Wait for it to finish or use keyboard dictation.",
+      recognitionClosing: "The previous listening session has not ended yet. Try again shortly or use keyboard dictation.",
+      endTimeout: "The browser did not finish listening. Use keyboard dictation or try again. The result has not been entered.",
       timeout: "The microphone returned no result. Use keyboard dictation or type the value. You can also check permissions and internet access.",
       startError: "The microphone could not start. Check browser permissions and try again.",
       unknownError: "Speech recognition failed. Try again or enter the value manually.",
@@ -132,6 +148,8 @@
   let applying = false;
   let scheduled = false;
   let composing = false;
+  let ownedPrompt = null;
+  let closingRecognition = null;
 
   const panel = document.createElement("section");
   panel.id = "grl-voice-panel";
@@ -209,6 +227,7 @@
 
   function release(current) {
     clearDictationSubmit(current);
+    clearIOSPrompt(current, true);
     clearTimeout(current?.startTimeout);
     clearTimeout(current?.timeout);
     clearTimeout(current?.finalTimeout);
@@ -217,7 +236,18 @@
       const recognition = current.recognition;
       current.recognition = null;
       recognition.onresult = recognition.onstart = recognition.onend = recognition.onerror = recognition.onnomatch = null;
-      try { recognition.abort(); } catch (_) { /* Already stopped. */ }
+      if (current.startRequested && !current.recognitionEnded) {
+        if (isIOS) {
+          // Abort immediately for cancellation, but wait for the native end
+          // acknowledgement before allowing another iOS recognition session.
+          closingRecognition = recognition;
+          recognition.onend = () => {
+            if (closingRecognition === recognition) closingRecognition = null;
+            recognition.onend = null;
+          };
+        }
+        try { recognition.abort(); } catch (_) { /* No confirmed end: retain the iOS guard. */ }
+      }
     }
     current.button?.classList.remove("is-listening");
     current.button?.setAttribute("aria-pressed", "false");
@@ -288,6 +318,66 @@
       () => start(current.input, current.button, current.method === "dictation" ? "speech" : "dictation"));
     focusAction(current);
     help.textContent = current.method === "dictation" ? copy.dictationHelp : copy.manual;
+  }
+
+  function clearIOSPrompt(current, cancel) {
+    clearTimeout(current?.promptTimeout);
+    const prompt = current?.prompt;
+    if (!prompt) return;
+    current.prompt = null;
+    prompt.utterance.onend = prompt.utterance.onerror = null;
+    if (ownedPrompt !== prompt) return;
+    ownedPrompt = null;
+    if (cancel) {
+      try { prompt.synthesis.cancel(); } catch (_) { /* Only our active prompt is cancelled. */ }
+    }
+  }
+
+  function prepareIOSSpeech(current, begin) {
+    const copy = COPY[current.language];
+    const synthesis = window.speechSynthesis;
+    if (!synthesis || typeof synthesis.speak !== "function" || typeof window.SpeechSynthesisUtterance !== "function") {
+      fail(current, copy.promptError, "prompt-unavailable");
+      return;
+    }
+    // Do not enqueue over another utterance or cancel someone else's playback.
+    if (synthesis.speaking || synthesis.pending || synthesis.paused) {
+      fail(current, copy.promptBusy, "prompt-busy");
+      return;
+    }
+    try {
+      const utterance = new SpeechSynthesisUtterance(copy.iosPrompt);
+      utterance.lang = current.language;
+      utterance.volume = 1;
+      utterance.rate = 1;
+      const prompt = { synthesis, utterance };
+      current.prompt = prompt;
+      ownedPrompt = prompt;
+      current.state = "prompting";
+      panel.dataset.state = current.state;
+      message.textContent = copy.iosPreparing;
+      const active = () => session === current && current.state === "prompting" && current.prompt === prompt && ownedPrompt === prompt;
+      utterance.onend = () => {
+        if (!active()) return;
+        clearIOSPrompt(current, false);
+        current.state = "listening";
+        panel.dataset.state = current.state;
+        message.textContent = copy.starting;
+        begin();
+      };
+      utterance.onerror = () => {
+        if (!active()) return;
+        clearIOSPrompt(current, false);
+        fail(current, copy.promptError, "prompt-error");
+      };
+      current.promptTimeout = setTimeout(() => {
+        if (active()) fail(current, copy.promptError, "prompt-timeout");
+      }, 10000);
+      synthesis.speak(utterance);
+    } catch (_) {
+      clearIOSPrompt(current, false);
+      fail(current, copy.promptError, "prompt-error");
+    }
   }
 
   function setField(input, value) {
@@ -441,7 +531,7 @@
   }
 
   function start(input, button, method) {
-    if (!method && session?.button === button && ["listening", "dictating"].includes(session.state)) { dismiss(true); return; }
+    if (!method && session?.button === button && ["prompting", "listening", "dictating"].includes(session.state)) { dismiss(true); return; }
     const enteredFromPanel = panel.contains(document.activeElement);
     dismiss();
     const info = describe(input);
@@ -462,10 +552,13 @@
       return;
     }
     show(current, copy.starting);
-    help.textContent = copy.privacy;
+    help.textContent = isIOS ? `${copy.iosHelp} ${copy.privacy}` : copy.privacy;
     if (!Speech) { fail(current, copy.unsupported, "unsupported"); return; }
     if (!window.isSecureContext && location.protocol !== "file:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
       fail(current, copy.https, "insecure-context"); return;
+    }
+    if (isIOS && closingRecognition) {
+      fail(current, copy.recognitionClosing, "recognition-closing"); return;
     }
     try {
       const recognition = new Speech();
@@ -481,10 +574,11 @@
         clearTimeout(current.startTimeout);
         button.classList.add("is-listening");
         button.setAttribute("aria-pressed", "true");
-        message.textContent = current.info.type === "time" ? copy.listenTime : copy.listenDate;
+        message.textContent = `${current.info.type === "time" ? copy.listenTime : copy.listenDate}${isIOS ? ` ${copy.iosPause}` : ""}`;
         current.timeout = setTimeout(() => {
           if (!active()) return;
-          if (current.text) interpret(current);
+          if (isIOS && current.text) fail(current, copy.endTimeout, "end-timeout");
+          else if (current.text) interpret(current);
           else fail(current, copy.timeout, "no-result-timeout");
         }, 20000);
       };
@@ -498,25 +592,46 @@
         current.text = finalParts.join(" ").trim();
         transcript.textContent = copy.hearing([...finalParts, ...interimParts].join(" ").trim());
         clearTimeout(current.finalTimeout);
-        if (current.text && !interimParts.length) {
+        if (!isIOS && current.text && !interimParts.length) {
           // Some mobile engines omit the end event. Do not leave the microphone open.
           current.finalTimeout = setTimeout(() => interpret(current), 800);
         }
       };
-      recognition.onend = () => { if (active()) interpret(current); };
+      recognition.onend = () => {
+        if (!active()) return;
+        current.recognitionEnded = true;
+        interpret(current);
+      };
       recognition.onnomatch = () => { if (active()) fail(current, copy.noMatch, "no-match"); };
       recognition.onerror = (event) => { if (active()) fail(current, copy.errors[event.error] || copy.unknownError, event.error || "recognition-error"); };
-      action(copy.stop, "stop", () => {
-        if (session !== current || !current.recognition) return;
-        message.textContent = copy.processing;
-        try { current.recognition.stop(); } catch (_) { interpret(current); }
-      });
+      if (isIOS) action(copy.cancelListening, "cancel-listening", () => dismiss(true));
+      else action(copy.stop, "stop", () => {
+          if (session !== current || !current.recognition) return;
+          message.textContent = copy.processing;
+          try { current.recognition.stop(); } catch (_) { interpret(current); }
+        });
       if (enteredFromPanel) focusAction(current, true);
-      current.startTimeout = setTimeout(() => {
-        if (active() && !current.started) fail(current, copy.startTimeout, "start-timeout");
-      }, 60000);
-      // Must run in the user's click handler; never start in a timer or on page load.
-      recognition.start();
+      const begin = () => {
+        if (!active() || current.startRequested) return;
+        if (!intact(current)) { fail(current, copy.changed); return; }
+        if (isIOS && closingRecognition) {
+          fail(current, copy.recognitionClosing, "recognition-closing"); return;
+        }
+        current.startRequested = true;
+        current.startTimeout = setTimeout(() => {
+          if (active() && !current.started) fail(current, copy.startTimeout, "start-timeout");
+        }, 60000);
+        try { recognition.start(); }
+        catch (error) {
+          current.startRequested = false;
+          fail(current, copy.startError, `start-${error?.name || "error"}`);
+        }
+      };
+      // iOS: audible prompt and natural recognition end are a reported WebKit
+      // workaround (bug 321436, comments 8–9), not a guarantee for every device.
+      // Other browsers still start directly in the user's click handler.
+      if (isIOS) prepareIOSSpeech(current, begin);
+      else begin();
     } catch (error) {
       fail(current, copy.startError, `start-${error?.name || "error"}`);
     }
@@ -552,7 +667,7 @@
       input.parentElement.append(button); // Do not reparent a React-owned input.
       buttons.set(input, button);
     });
-    if (session && ["listening", "dictating", "choice", "ready"].includes(session.state) && !intact(session)) dismiss();
+    if (session && ["prompting", "listening", "dictating", "choice", "ready"].includes(session.state) && !intact(session)) dismiss();
   }
 
   languageSelect.addEventListener("change", () => {
@@ -612,7 +727,7 @@
     if (event.target.closest(".week-switch, .floating-week-nav, .action-bar")) dismiss();
   }, true);
   const manualEdit = (event) => {
-    if (!applying && session && ["listening", "dictating", "choice", "ready"].includes(session.state) && event.target.closest("#root")) dismiss();
+    if (!applying && session && ["prompting", "listening", "dictating", "choice", "ready"].includes(session.state) && event.target.closest("#root")) dismiss();
   };
   document.addEventListener("input", manualEdit, true);
   document.addEventListener("change", manualEdit, true);
