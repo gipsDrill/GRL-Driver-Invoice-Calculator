@@ -1,4 +1,4 @@
-const CACHE_NAME = "grl-driver-invoice-v5";
+const CACHE_NAME = "grl-driver-invoice-v7";
 const SCOPE_URL = self.registration.scope;
 const scopedUrl = (path = "") => new URL(path, SCOPE_URL).toString();
 const APP_SHELL = [
@@ -8,8 +8,11 @@ const APP_SHELL = [
   "mobile-polish.css",
   "install-shortcut.js",
   "sticky-week-switch.js?v=4",
-  "nextgen.css?v=4",
+  "nextgen.css?v=5",
   "nextgen-ui.js?v=4",
+  "voice-input.css?v=2",
+  "voice-parser.js?v=2",
+  "voice-input.js?v=2",
   "og-image.jpeg",
   "icons/grl-app-192.png",
   "icons/grl-app-512.png",
@@ -31,7 +34,7 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
+        Promise.all(keys.filter((key) => key.startsWith("grl-driver-invoice-") && key !== CACHE_NAME).map((key) => caches.delete(key))),
       )
       .then(() => self.clients.claim()),
   );

@@ -1,0 +1,171 @@
+/* Independent of native input/picker layout: the microphone sits in the label. */
+label.grl-voice-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 4px 6px;
+}
+label.grl-voice-field > input {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+}
+.grl-voice-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid #d6c5c9;
+  border-radius: 10px;
+  background: #f8f0f2;
+  color: #54152f;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+label.grl-voice-field > .grl-voice-button {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+td.grl-voice-field > .grl-voice-button {
+  display: flex;
+  margin: 5px auto 0;
+}
+.grl-voice-button:hover { background: #ecdae1; }
+.grl-voice-button.is-listening {
+  background: #54152f;
+  color: #fff;
+  border-color: #54152f;
+  box-shadow: 0 0 0 3px #b885624d;
+}
+#grl-voice-panel[hidden] { display: none; }
+#grl-voice-panel {
+  position: fixed;
+  z-index: 1000;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(420px, calc(100vw - 28px));
+  max-height: min(520px, 65vh);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 16px 18px;
+  border: 1px solid #c7abae;
+  border-radius: 18px;
+  background: #fffdf9;
+  color: #231f20;
+  box-shadow: 0 12px 60px #0006;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  overscroll-behavior: contain;
+}
+#grl-voice-panel .grl-voice-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #702544;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .12em;
+}
+#grl-voice-language {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid #d6c5c9;
+  border-radius: 10px;
+  background: #f6edef;
+  color: #54152f;
+  font-family: inherit;
+  font-size: 16px;
+  letter-spacing: normal;
+}
+#grl-voice-panel h2 {
+  margin: 4px 0 12px;
+  font-size: 18px;
+  line-height: 1.3;
+  color: #231f20;
+}
+#grl-voice-panel p { margin: 10px 0; }
+#grl-voice-panel .grl-voice-transcript {
+  color: #675b61;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+#grl-voice-panel .grl-voice-transcript:empty { display: none; }
+#grl-voice-panel .grl-voice-guide {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #e5d9da;
+  color: #54152f;
+  font-size: 13px;
+}
+#grl-voice-panel .grl-voice-guide summary {
+  padding: 7px 0;
+  cursor: pointer;
+  font-weight: 650;
+}
+#grl-voice-panel .grl-voice-guide p {
+  color: #675b61;
+  line-height: 1.5;
+}
+#grl-voice-panel .grl-voice-help {
+  margin-bottom: 0;
+  color: #6d6264;
+  font-size: 12px;
+  line-height: 1.5;
+}
+#grl-voice-panel button {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid #d6c5c9;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  background: #f6edef;
+  color: #54152f;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+#grl-voice-panel .grl-voice-heading button {
+  min-width: 44px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  font-size: 26px;
+  line-height: 1;
+}
+#grl-voice-panel .grl-voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+#grl-voice-panel [data-voice-action="apply"] {
+  flex: 1 0 auto;
+  background: #54152f;
+  border-color: #54152f;
+  color: #fff;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  label.grl-voice-field { grid-template-columns: minmax(0, 1fr) 44px; }
+  .grl-voice-button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+}
+@media (max-width: 760px) {
+  #grl-voice-panel {
+    right: 14px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+@media print {
+  .grl-voice-button, #grl-voice-panel { display: none !important; }
+}
